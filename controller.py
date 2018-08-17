@@ -1,3 +1,5 @@
+#jge - committing this with a tag from Windows 
+
 from time import sleep
 import pigpio
 import time
