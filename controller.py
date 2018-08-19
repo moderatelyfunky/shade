@@ -139,16 +139,41 @@ class Motor():
         pi.wave_tx_stop()
 
     def gotoPreset(self):
+        #jge - temporary things for dev tests
+        self.wakeUp()
+        topShade.motor.wakeUp()
+
         leftShade.motor.stepsToDestination = 100
         rightShade.motor.stepsToDestination = 88
         topShade.motor.stepsToDestination = 1000
         botShade.motor.stepsToDestination = 900
+        #jge - end temporary
+        ####################
 
-        stepCount = self.buildStartRamp()
-        #jge - not sure why a gap is being left between the start and end
-        time.sleep((float(stepCount)/1000.0))
-        self.buildStopRamp()
+        pi.wave_clear()
+        wfComplete=[]
+
+        wfComplete = self.buildRamp(1100, 400, 1)
+        #wfComplete += self.buildSteadyWave(len(wfComplete)* 2)
+        wfComplete += self.buildRamp(400, 1100, -1)
+
+        #jge - send the combined waveform to pigpiod.pi
+        pi.wave_add_generic(wfComplete)
+        widComplete = pi.wave_create()
+        pi.wave_send_once(widComplete)
         
+    def buildRamp(self, startDelay, finalDelay, step):
+        #jge - startDelay - higher number = lower starting freq
+        #jge - finalDelay - higher number = lower final frequency
+        #jge - step - Lower number = more gradual and more steps
+
+        wfStart=[]
+        for delay in range(startDelay, finalDelay, -step):
+            wfStart.append(pigpio.pulse((1<<19)|(1<<17), 0, delay))
+            wfStart.append(pigpio.pulse(0, (1<<19)|(1<<17), delay))
+
+        return wfStart 
+
     def buildSteadyWave(self, stepsAlreadyEatenByRamps):
         #jge - this is going to be the method that receives an integer
         #jge - that is the greatest step count that needs to be made
@@ -182,79 +207,20 @@ class Motor():
             print('Ratio for ' + allShades[i].name + ' = ' + str(int(max_value / lrtbStepsToDest[i])))
 
         ######
-        wf=[]
-        for thisStep in range(START_DELAY, FINAL_DELAY, -STEP):
-            #print('delay = ' + str(delay))
-            wf.append(pigpio.pulse((1<<19)|(1<<17), 0, delay))
-            wf.append(pigpio.pulse(0, (1<<19)|(1<<17), delay))
-        pi.wave_add_generic(wf)
+        #wf=[]
+        #for thisStep in range(START_DELAY, FINAL_DELAY, -STEP):
+        #    #print('delay = ' + str(delay))
+        #    wf.append(pigpio.pulse((1<<19)|(1<<17), 0, delay))
+        #    wf.append(pigpio.pulse(0, (1<<19)|(1<<17), delay))
+        #pi.wave_add_generic(wf)
 
         #print('b wf length = ' + str(len(wf)))
-        totalSteps = len(wf)
+        #totalSteps = len(wf)
 
-        wid1 = pi.wave_create()
-
-        # send ramp, stop when final rate reached
-        pi.wave_send_once(wid1)
-           
-    def buildStartRamp(self):
-        #jge - trying a version with step count for all shades predetermined
-        #this ramp, which is moderately pleasing in it's proportions is 1400 pulses
-        
-        START_DELAY=1100 #jge - higher number = lower starting freq
-        FINAL_DELAY=400 #jge - higher number = lower final frequency
-        STEP=1 #jge - Lower number = more gradual and more steps
-
-        #jge - temporary
-        self.wakeUp()
-        topShade.motor.wakeUp()
-
-        pi.wave_clear()
-
-        wf=[]
-        for delay in range(START_DELAY, FINAL_DELAY, -STEP):
-            #print('delay = ' + str(delay))
-            wf.append(pigpio.pulse((1<<19)|(1<<17), 0, delay))
-            wf.append(pigpio.pulse(0, (1<<19)|(1<<17), delay))
-        pi.wave_add_generic(wf)
-
-
-        #print('b wf length = ' + str(len(wf)))
-        totalSteps = len(wf)
-
-        wid1 = pi.wave_create()
+        #wid1 = pi.wave_create()
 
         # send ramp, stop when final rate reached
-        pi.wave_send_once(wid1)
-        #time.sleep(float(offset)/1000000.0) # make sure it's a float
-        #pi.wave_send_repeat(wid0)
-        #time.sleep(1)
-
-        #pi.wave_tx_stop()
-
-        return totalSteps
-
-    def buildStopRamp(self):
-        #jge - for now, this is a mirror of the start ramp method
-        
-        START_DELAY=400 #jge - higher number = lower starting freq
-        FINAL_DELAY=1100 #jge - higher number = lower final frequency
-        STEP=1 #jge - Lower number = more gradual and more steps
-
-        wfStop=[]
-        for delay in range(START_DELAY, FINAL_DELAY, +STEP):
-            wfStop.append(pigpio.pulse((1<<19)|(1<<17), 0, delay))
-            wfStop.append(pigpio.pulse(0, (1<<19)|(1<<17), delay))
-        pi.wave_add_generic(wfStop)
-
-        totalSteps = len(wfStop)
-
-        widStop = pi.wave_create()
-
-        # send ramp, stop when final rate reached
-        pi.wave_send_once(widStop)
-
-        return totalSteps
+        #pi.wave_send_once(wid1)
     
 class Shade():
     #jge - Object to stand in for a blind assembly 
