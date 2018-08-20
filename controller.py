@@ -1,5 +1,3 @@
-#jge - committing this with a tag from Windows 
-#du
 from time import sleep
 import pigpio
 import time
@@ -48,10 +46,10 @@ class Environment():
 class Motor():
     #jge - Object to act like a motor
 
-    def __init__(self, motorSleepPin = 0, motorDirPin = 0, motorStepPin = 0, direction = 0, name = ''):
-        self.motorSleepPin = motorSleepPin
-        self.motorDirPin = motorDirPin
-        self.motorStepPin = motorStepPin
+    def __init__(self, sleepPin = 0, dirPin = 0, stepPin = 0, direction = 0, name = ''):
+        self.sleepPin = sleepPin
+        self.dirPin = dirPin
+        self.stepPin = stepPin
         self.direction = direction
         self.name = name
         self.stepsToDestination = 0
@@ -59,24 +57,24 @@ class Motor():
 
     def move(self, direction):
         self.wakeUp()
-        pi.write(self.motorSleepPin, 1)
-        pi.write(self.motorDirPin, direction)
-        pi.write(self.motorStepPin, 1)
-        pi.set_PWM_dutycycle(self.motorStepPin, 128)  # PWM 1/2 On 1/2 Off
-        pi.set_PWM_frequency(self.motorStepPin, 500)
+        pi.write(self.sleepPin, 1)
+        pi.write(self.dirPin, direction)
+        pi.write(self.stepPin, 1)
+        pi.set_PWM_dutycycle(self.stepPin, 128)  # PWM 1/2 On 1/2 Off
+        pi.set_PWM_frequency(self.stepPin, 500)
         sleep(.05)        
 
     def wakeUp(self):
         #jge - this restores power to the motor
-        pi.write(self.motorSleepPin, 1)
+        pi.write(self.sleepPin, 1)
 
     def sleep(self):
         #jge - this turns off motor voltage
-        pi.write(self.motorSleepPin, 0)
+        pi.write(self.sleepPin, 0)
 
     def stop(self):
-        pi.write(self.motorStepPin, 0)
-        pi.write(self.motorSleepPin, 0)   
+        pi.write(self.stepPin, 0)
+        pi.write(self.sleepPin, 0)   
         self.sleep()
 
     def gotoPreset(self):
@@ -85,30 +83,46 @@ class Motor():
         self.wakeUp()
         topShade.motor.wakeUp()
 
-        leftShade.motor.stepsToDestination = 100
-        rightShade.motor.stepsToDestination = 88
-        topShade.motor.stepsToDestination = 1000
-        botShade.motor.stepsToDestination = 900
+        leftShade.motor.stepsToDestination = 1500
+        rightShade.motor.stepsToDestination = 0
+        #jge - increasing the following number breaks the code at some point
+        topShade.motor.stepsToDestination = 8000
+        botShade.motor.stepsToDestination = 0
         #jge - end temporary
         ####################
 
-        #jge - initialize the wave
+        leftShade.motor.wakeUp()
         pi.wave_clear()
-        wfComplete = []
-        
-        #jge - construct the three sections of the wave.
-        wfStart = self.buildRamp(1100, 400, 1)
+
+        wfStart= self.buildRamp(1100, 400, 1)
+        pi.wave_add_generic(wfStart)
+        startRamp = pi.wave_create()
+
+        wfMiddle=[]
+        for i in range(1000):         
+            wfMiddle.append(pigpio.pulse(1<<19, 0, 400))
+            wfMiddle.append(pigpio.pulse(0, 1<<19, 400))
+        pi.wave_add_generic(wfMiddle)
+        middleWave = pi.wave_create()
+
         wfEnd = self.buildRamp(400, 1100, -1)
-        wfMiddle = self.buildSteadyWave(400, len(wfStart) + len(wfEnd), )
-        wfComplete = wfStart + wfMiddle + wfEnd
-    
-        #jge - send the combined waveform to pigpiod.pi
-        #jge - spent time trying to send three discrete waves for
-        #jge - the ramps and middle, but timing was glitchy
-        pi.wave_add_generic(wfComplete)
-        widComplete = pi.wave_create()
-        pi.wave_send_once(widComplete)
+        pi.wave_add_generic(wfEnd)
+        stopRamp = pi.wave_create()       
+
+        pi.wave_chain([
+           startRamp,        
+           255, 0,                       
+              middleWave,    
+           255, 1, 8, 2, #loop x + y*256 times
+           stopRamp,       
+           ])
+
+        while pi.wave_tx_busy():
+           time.sleep(0.1);
+
+        pi.wave_delete(stopRamp)
         
+
     def buildRamp(self, startDelay, finalDelay, step):
         #jge - startDelay - higher number = lower starting freq
         #jge - finalDelay - higher number = lower final frequency
@@ -122,10 +136,8 @@ class Motor():
         return wfStart 
 
     def buildSteadyWave(self, delay, stepsAlreadyEatenByRamps):
-        #jge - this is going to be the method that receives an integer
-        #jge - that is the greatest step count that needs to be made
-        #jge - of all the shades.
-
+        #jge - this is the section of the preset movement between the ramps
+        
         leftStepsToDest = leftShade.motor.stepsToDestination - stepsAlreadyEatenByRamps
         rightStepsToDest = rightShade.motor.stepsToDestination - stepsAlreadyEatenByRamps
         topStepsToDest = topShade.motor.stepsToDestination - stepsAlreadyEatenByRamps
@@ -153,13 +165,16 @@ class Motor():
             print('Low steps for ' + allShades[i].name + ' = ' + str(thisCountOfLowSteps)) 
             print('Ratio for ' + allShades[i].name + ' = ' + str(int(max_value / lrtbStepsToDest[i])))
 
-        #jge - hard coded 1000 steps just to see how the sandwich works
-            
         wfMiddle = []
-        for thisStep in range(1000):
-            wfMiddle.append(pigpio.pulse((1<<19)|(1<<17), 0, delay))
-            wfMiddle.append(pigpio.pulse(0, (1<<19)|(1<<17), delay))
+        #jge - set loop count = the greatest adjusted step count
+        for thisStep in range(max_value):
 
+            for i, thisShade in enumerate(allShades):
+                if (lrtbStepsToDest[i] > thisStep):
+                    wfMiddle.append(pigpio.pulse(1<<int(allShades[i].motor.stepPin), 0, delay))
+                    wfMiddle.append(pigpio.pulse(0, 1<<int(allShades[i].motor.stepPin), delay))
+
+        print('Middle pulse count = ' + str(len(wfMiddle)))
         return wfMiddle
 
 class Shade():
@@ -259,7 +274,7 @@ try:
             leftShade.motor.gradual()
         elif (dirKey == 'r'):
             print('Goto preset')
-            leftShade.motor.gotoPreset()
+            leftShade.motor.waveChainIt()
         else:
             pass
 except Exception as e :
