@@ -52,7 +52,7 @@ class Motor():
         self.stepPin = stepPin
         self.direction = direction
         self.name = name
-        self.stepsToDestination = 0
+        self.stepsToDest = 0
         print('Created ' + self.name)
 
     def move(self, direction):
@@ -76,53 +76,7 @@ class Motor():
         pi.write(self.stepPin, 0)
         pi.write(self.sleepPin, 0)   
         self.sleep()
-
-    def gotoPreset(self):
-        ####################
-        #jge - temporary things for dev tests
-        self.wakeUp()
-        topShade.motor.wakeUp()
-
-        leftShade.motor.stepsToDestination = 1500
-        rightShade.motor.stepsToDestination = 0
-        #jge - increasing the following number breaks the code at some point
-        topShade.motor.stepsToDestination = 8000
-        botShade.motor.stepsToDestination = 0
-        #jge - end temporary
-        ####################
-
-        leftShade.motor.wakeUp()
-        pi.wave_clear()
-
-        wfStart= self.buildRamp(1100, 400, 1)
-        pi.wave_add_generic(wfStart)
-        startRamp = pi.wave_create()
-
-        wfMiddle=[]
-        for i in range(1000):         
-            wfMiddle.append(pigpio.pulse(1<<19, 0, 400))
-            wfMiddle.append(pigpio.pulse(0, 1<<19, 400))
-        pi.wave_add_generic(wfMiddle)
-        middleWave = pi.wave_create()
-
-        wfEnd = self.buildRamp(400, 1100, -1)
-        pi.wave_add_generic(wfEnd)
-        stopRamp = pi.wave_create()       
-
-        pi.wave_chain([
-           startRamp,        
-           255, 0,                       
-              middleWave,    
-           255, 1, 8, 2, #loop x + y*256 times
-           stopRamp,       
-           ])
-
-        while pi.wave_tx_busy():
-           time.sleep(0.1);
-
-        pi.wave_delete(stopRamp)
         
-
     def buildRamp(self, startDelay, finalDelay, step):
         #jge - startDelay - higher number = lower starting freq
         #jge - finalDelay - higher number = lower final frequency
@@ -134,48 +88,6 @@ class Motor():
             wfStart.append(pigpio.pulse(0, (1<<19)|(1<<17), delay))
 
         return wfStart 
-
-    def buildSteadyWave(self, delay, stepsAlreadyEatenByRamps):
-        #jge - this is the section of the preset movement between the ramps
-        
-        leftStepsToDest = leftShade.motor.stepsToDestination - stepsAlreadyEatenByRamps
-        rightStepsToDest = rightShade.motor.stepsToDestination - stepsAlreadyEatenByRamps
-        topStepsToDest = topShade.motor.stepsToDestination - stepsAlreadyEatenByRamps
-        botStepsToDest = botShade.motor.stepsToDestination - stepsAlreadyEatenByRamps
-        #adjustedMaxStepCount = maxSteps - startStopRampSteps
-
-        #jge - put into array to figure out which has most with the operator method
-        lrtbStepsToDest = [leftStepsToDest, rightStepsToDest, topStepsToDest, botStepsToDest]
-        max_value = max(lrtbStepsToDest)
-        print('max value = ' + str(max_value))
-        max_index = lrtbStepsToDest.index(max_value)
-        print('the shade with the greatest step count is ' + allShades[max_index].name)
-
-        countOfLowSteps = []
-        lrtbOnOffRatios = []
-        #jge - now get the step difference from the max to all others
-        #jge - Also do the math to figure out the ratio of on vs off
-        #jge - so that when in the wave building for loop, can
-        #jge - check if the current iteration is divisible by this number
-
-        for i, thisShade in enumerate(allShades):
-            thisCountOfLowSteps = max_value - lrtbStepsToDest[i]
-            countOfLowSteps.append(thisCountOfLowSteps)
-            lrtbOnOffRatios.append(int(max_value / lrtbStepsToDest[i]))
-            print('Low steps for ' + allShades[i].name + ' = ' + str(thisCountOfLowSteps)) 
-            print('Ratio for ' + allShades[i].name + ' = ' + str(int(max_value / lrtbStepsToDest[i])))
-
-        wfMiddle = []
-        #jge - set loop count = the greatest adjusted step count
-        for thisStep in range(max_value):
-
-            for i, thisShade in enumerate(allShades):
-                if (lrtbStepsToDest[i] > thisStep):
-                    wfMiddle.append(pigpio.pulse(1<<int(allShades[i].motor.stepPin), 0, delay))
-                    wfMiddle.append(pigpio.pulse(0, 1<<int(allShades[i].motor.stepPin), delay))
-
-        print('Middle pulse count = ' + str(len(wfMiddle)))
-        return wfMiddle
 
 class Shade():
     #jge - Object to stand in for a blind assembly 
@@ -219,6 +131,231 @@ allShades = [leftShade, rightShade, topShade, botShade]
 
 #jge - end init
 #################################################################
+
+##################################################3
+#jge - preset
+def newSchoolPresetGoer():
+    ################################
+    #jge - temp variables for dev
+    leftShade.motor.wakeUp()
+    rightShade.motor.wakeUp()
+    topShade.motor.wakeUp()
+    botShade.motor.wakeUp()
+
+    
+    leftShade.motor.stepsToDest = 5000
+    rightShade.motor.stepsToDest = 4100
+    topShade.motor.stepsToDest = 3200
+    botShade.motor.stepsToDest = 2500
+
+    maxDelay = 1100
+    minDelay = 400
+    step = 1
+    #jge - end temp variables for dev
+    ################################
+
+    ################################
+    #jge - start of start wave construction
+
+    #jge - sort the shades by least steps to travel
+    sortedShades = sorted(allShades, key=lambda x: x.motor.stepsToDest, reverse=False)
+        
+    wfStart_A = []
+    pulseCount = 0
+    for delay in range(maxDelay, minDelay, -step):
+        bitWisePinShift = ''
+        pulseCount += 1
+        for i, thisShade in enumerate(sortedShades):
+            if (thisShade.motor.stepsToDest > pulseCount):
+                if (str(bitWisePinShift) == ''):
+                    bitWisePinShift = sortedShades[i].motor.stepPin
+                else:
+                    bitWisePinShift += sortedShades[i].motor.stepPin
+
+        #jge - now build the pulse for all the pins who need it
+        wfStart_A.append(pigpio.pulse(bitWisePinShift, 0, delay))
+        wfStart_A.append(pigpio.pulse(0, bitWisePinShift, delay))
+
+    print('Steps in wfStart_A = ' + str(len(wfStart_A)))
+
+    wfStart = wfStart_A
+    print('Steps used by startRamp = ' + str(len(wfStart)))
+
+    #jge - end start wave construction
+    ###################################
+
+    stepsAlreadyTaken = len(wfStart)
+    ###################################
+    #jge - middle wave construction start
+    wfMiddle_A = []
+
+    #jge - store the count to feed to the wave_chain looper
+    maxSingle = 256
+    countMiddle_A = sortedShades[0].motor.stepsToDest - stepsAlreadyTaken
+    #print('Smallest step shade is ' + sortedShades[0].name + ' steps left = ' + str(sortedShades[0].motor.stepsToDest))
+    print('countMiddle_A = ' + str(countMiddle_A))
+    if (countMiddle_A > 256):
+        #loop x + y*256 times
+        wfMiddle_A_LoopCount = int(countMiddle_A / maxSingle)
+        wfMiddle_A_Singles = countMiddle_A % maxSingle
+    else:
+        wfMiddle_A_LoopCount = 0
+        wfMiddle_A_Singles = countMiddle_A
+        
+    print('A loopcount = ' + str(wfMiddle_A_LoopCount))
+    print('A singles = ' + str(wfMiddle_A_Singles))
+
+
+    if (sortedShades[0].motor.stepsToDest > stepsAlreadyTaken):
+        #jge - if the least steps are more than the start ramp, it means all are
+        bitWisePinShift = ''
+        for i, thisShade in enumerate(sortedShades):
+            if (str(bitWisePinShift) == ''):
+                bitWisePinShift = sortedShades[i].motor.stepPin
+            else:
+                bitWisePinShift += sortedShades[i].motor.stepPin
+        wfMiddle_A.append(pigpio.pulse(bitWisePinShift, 0, minDelay))
+        wfMiddle_A.append(pigpio.pulse(0, bitWisePinShift, minDelay))            
+    #jge - remove the shade that has had steps used up
+    sortedShades.remove(sortedShades[0])
+    stepsAlreadyTaken += (wfMiddle_A_LoopCount * 256) + wfMiddle_A_Singles
+
+    wfMiddle_B = []
+    #jge - the first in the list is now the second least steps - removed above
+    countMiddle_B = sortedShades[0].motor.stepsToDest - stepsAlreadyTaken
+    #jge - store the count to feed to the wave_chain looper
+    if (countMiddle_B > 256):
+        #loop x + y*256 times
+        wfMiddle_B_LoopCount = int(countMiddle_B / maxSingle)
+        wfMiddle_B_Singles = countMiddle_B % maxSingle        
+    else:
+        wfMiddle_B_LoopCount = 0
+        wfMiddle_B_Singles = countMiddle_B
+    print('B loopcount = ' + str(wfMiddle_B_LoopCount))
+    print('B singles = ' + str(wfMiddle_B_Singles))
+
+    if (sortedShades[0].motor.stepsToDest > stepsAlreadyTaken):
+        #jge - if the least steps are more than the start ramp, it means all are
+        bitWisePinShift = ''
+        for i, thisShade in enumerate(sortedShades):
+            if (str(bitWisePinShift) == ''):
+                bitWisePinShift = sortedShades[i].motor.stepPin
+            else:
+                bitWisePinShift += sortedShades[i].motor.stepPin
+        wfMiddle_B.append(pigpio.pulse(bitWisePinShift, 0, minDelay))
+        wfMiddle_B.append(pigpio.pulse(0, bitWisePinShift, minDelay))      
+    #jge - remove the shade that has had steps used up
+    sortedShades.remove(sortedShades[0])
+    stepsAlreadyTaken += (wfMiddle_B_LoopCount * 256) + wfMiddle_B_Singles
+
+    wfMiddle_C = []
+    countMiddle_C = sortedShades[0].motor.stepsToDest - stepsAlreadyTaken
+
+    #jge - store the count to feed to the wave_chain looper
+    if (countMiddle_C > 256):
+        #loop x + y*256 times
+        wfMiddle_C_LoopCount = int(countMiddle_C / maxSingle)
+        wfMiddle_C_Singles = countMiddle_C % maxSingle      
+    else:
+        wfMiddle_C_LoopCount = 0
+        wfMiddle_C_Singles = countMiddle_C
+
+    print('C loopcount = ' + str(wfMiddle_C_LoopCount))
+    print('C singles = ' + str(wfMiddle_C_Singles))
+    
+    if (sortedShades[0].motor.stepsToDest > stepsAlreadyTaken):
+        #jge - if the least steps are more than the start ramp, it means all are
+        bitWisePinShift = ''
+        for i, thisShade in enumerate(sortedShades):
+            if (str(bitWisePinShift) == ''):
+                bitWisePinShift = sortedShades[i].motor.stepPin
+            else:
+                bitWisePinShift += sortedShades[i].motor.stepPin
+        wfMiddle_C.append(pigpio.pulse(bitWisePinShift, 0, minDelay))
+        wfMiddle_C.append(pigpio.pulse(0, bitWisePinShift, minDelay))       
+    #jge - remove the shade that has had steps used up
+    sortedShades.remove(sortedShades[0])
+    stepsAlreadyTaken += (wfMiddle_C_LoopCount * 256) + wfMiddle_C_Singles
+
+    wfMiddle_D = []
+    #jge - store the count to feed to the wave_chain looper
+    countMiddle_D = sortedShades[0].motor.stepsToDest - len(wfStart) + len(wfMiddle_A) + len(wfMiddle_B) + len(wfMiddle_C)
+    countMiddle_D = sortedShades[0].motor.stepsToDest - len(wfStart) + len(wfMiddle_A) + len(wfMiddle_B) 
+
+    #jge - store the count to feed to the wave_chain looper
+    if (countMiddle_D > 256):
+        #loop x + y*256 times
+        wfMiddle_D_LoopCount = int(countMiddle_D / maxSingle)
+        wfMiddle_D_Singles = countMiddle_D % maxSingle      
+    else:
+        wfMiddle_D_LoopCount = 0
+        wfMiddle_D_Singles = countMiddle_D
+
+    print('D loopcount = ' + str(wfMiddle_D_LoopCount))
+    print('D singles = ' + str(wfMiddle_D_Singles))
+
+    if (sortedShades[0].motor.stepsToDest > stepsAlreadyTaken):
+        #jge - if the least steps are more than the start ramp, it means all are
+        bitWisePinShift = ''
+        for i, thisShade in enumerate(sortedShades):
+            if (str(bitWisePinShift) == ''):
+                bitWisePinShift = sortedShades[i].motor.stepPin
+            else:
+                bitWisePinShift += sortedShades[i].motor.stepPin
+        wfMiddle_D.append(pigpio.pulse(bitWisePinShift, 0, minDelay))
+        wfMiddle_D.append(pigpio.pulse(0, bitWisePinShift, minDelay))       
+    #jge - remove the shade that has had steps used up
+    
+    #jge - end middle wave construction
+    ###################################
+
+    #jge - now create and send the waves from the arrays
+    pi.wave_clear()
+
+    pi.wave_add_generic(wfStart)
+    startRamp = pi.wave_create()
+
+    pi.wave_add_generic(wfMiddle_A)
+    middleWave_A = pi.wave_create()
+
+    pi.wave_add_generic(wfMiddle_B)
+    middleWave_B = pi.wave_create()
+
+    pi.wave_add_generic(wfMiddle_C)
+    middleWave_C = pi.wave_create()
+
+    pi.wave_add_generic(wfMiddle_D)
+    middleWave_D = pi.wave_create()
+
+    allWaves = [startRamp, middleWave_A, middleWave_B, middleWave_C, middleWave_D]                                           
+
+    pi.wave_chain([
+       startRamp,        
+       255, 0,                       
+          middleWave_A,    
+       255, 1, wfMiddle_A_Singles, wfMiddle_A_LoopCount, #loop x + y*256 times
+       255, 0,                       
+          middleWave_B,    
+       255, 1, wfMiddle_B_Singles, wfMiddle_B_LoopCount,          
+       255, 0,                       
+          middleWave_C,    
+       255, 1, wfMiddle_C_Singles, wfMiddle_C_LoopCount,       
+       255, 0,                       
+          middleWave_D,    
+       255, 1, wfMiddle_D_Singles, wfMiddle_D_LoopCount,                             
+       ])
+
+    while pi.wave_tx_busy():
+       time.sleep(0.1)
+
+    pigpio.exceptions = True
+    print('done transmitting bro')
+    pi.wave_delete(startRamp)
+    pi.wave_delete(middleWave_A)
+    pi.wave_delete(middleWave_B)
+    pi.wave_delete(middleWave_C)
+    pi.wave_delete(middleWave_D)    
+###################################################
 
 #################################################################
 #jge - This would be main.  Infinite loop to check for user input
@@ -273,8 +410,8 @@ try:
             print('gradual with Count')
             leftShade.motor.gradual()
         elif (dirKey == 'r'):
-            print('Goto preset')
-            leftShade.motor.waveChainIt()
+            print('Goto newSchoolpreset')
+            newSchoolPresetGoer()
         else:
             pass
 except Exception as e :
