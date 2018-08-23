@@ -141,7 +141,6 @@ def newSchoolPresetGoer():
     rightShade.motor.wakeUp()
     topShade.motor.wakeUp()
     botShade.motor.wakeUp()
-
     
     leftShade.motor.stepsToDest = 5000
     rightShade.motor.stepsToDest = 4100
@@ -163,20 +162,18 @@ def newSchoolPresetGoer():
     wfStart_A = []
     pulseCount = 0
     for delay in range(maxDelay, minDelay, -step):
-        bitWisePinShift = ''
+        bitmask = 0
         pulseCount += 1
         for i, thisShade in enumerate(sortedShades):
             if (thisShade.motor.stepsToDest > pulseCount):
-                if (str(bitWisePinShift) == ''):
-                    bitWisePinShift = sortedShades[i].motor.stepPin
+                if (bitmask == 0):
+                    bitmask = int(1<<sortedShades[i].motor.stepPin)
                 else:
-                    bitWisePinShift += sortedShades[i].motor.stepPin
+                    bitmask += int(1<<sortedShades[i].motor.stepPin)
 
         #jge - now build the pulse for all the pins who need it
-        wfStart_A.append(pigpio.pulse(bitWisePinShift, 0, delay))
-        wfStart_A.append(pigpio.pulse(0, bitWisePinShift, delay))
-
-    print('Steps in wfStart_A = ' + str(len(wfStart_A)))
+        wfStart_A.append(pigpio.pulse(bitmask, 0, delay))
+        wfStart_A.append(pigpio.pulse(0, bitmask, delay))
 
     wfStart = wfStart_A
     print('Steps used by startRamp = ' + str(len(wfStart)))
@@ -208,14 +205,14 @@ def newSchoolPresetGoer():
 
     if (sortedShades[0].motor.stepsToDest > stepsAlreadyTaken):
         #jge - if the least steps are more than the start ramp, it means all are
-        bitWisePinShift = ''
+        bitmask = 0
         for i, thisShade in enumerate(sortedShades):
-            if (str(bitWisePinShift) == ''):
-                bitWisePinShift = sortedShades[i].motor.stepPin
+            if (bitmask == 0):
+                bitmask = int(1<<sortedShades[i].motor.stepPin)
             else:
-                bitWisePinShift += sortedShades[i].motor.stepPin
-        wfMiddle_A.append(pigpio.pulse(bitWisePinShift, 0, minDelay))
-        wfMiddle_A.append(pigpio.pulse(0, bitWisePinShift, minDelay))            
+                bitmask += int(1<<sortedShades[i].motor.stepPin)
+        wfMiddle_A.append(pigpio.pulse(bitmask, 0, minDelay))
+        wfMiddle_A.append(pigpio.pulse(0, bitmask, minDelay))            
     #jge - remove the shade that has had steps used up
     sortedShades.remove(sortedShades[0])
     stepsAlreadyTaken += (wfMiddle_A_LoopCount * 256) + wfMiddle_A_Singles
@@ -236,14 +233,14 @@ def newSchoolPresetGoer():
 
     if (sortedShades[0].motor.stepsToDest > stepsAlreadyTaken):
         #jge - if the least steps are more than the start ramp, it means all are
-        bitWisePinShift = ''
+        bitmask = 0
         for i, thisShade in enumerate(sortedShades):
-            if (str(bitWisePinShift) == ''):
-                bitWisePinShift = sortedShades[i].motor.stepPin
+            if (bitmask == ''):
+                bitmask = int(1<<sortedShades[i].motor.stepPin)
             else:
-                bitWisePinShift += sortedShades[i].motor.stepPin
-        wfMiddle_B.append(pigpio.pulse(bitWisePinShift, 0, minDelay))
-        wfMiddle_B.append(pigpio.pulse(0, bitWisePinShift, minDelay))      
+                bitmask += int(1<<sortedShades[i].motor.stepPin)
+        wfMiddle_B.append(pigpio.pulse(bitmask, 0, minDelay))
+        wfMiddle_B.append(pigpio.pulse(0, bitmask, minDelay))      
     #jge - remove the shade that has had steps used up
     sortedShades.remove(sortedShades[0])
     stepsAlreadyTaken += (wfMiddle_B_LoopCount * 256) + wfMiddle_B_Singles
@@ -265,14 +262,14 @@ def newSchoolPresetGoer():
     
     if (sortedShades[0].motor.stepsToDest > stepsAlreadyTaken):
         #jge - if the least steps are more than the start ramp, it means all are
-        bitWisePinShift = ''
+        bitmask = 0
         for i, thisShade in enumerate(sortedShades):
-            if (str(bitWisePinShift) == ''):
-                bitWisePinShift = sortedShades[i].motor.stepPin
+            if (bitmask == 0):
+                bitmask = int(1<<sortedShades[i].motor.stepPin)
             else:
-                bitWisePinShift += sortedShades[i].motor.stepPin
-        wfMiddle_C.append(pigpio.pulse(bitWisePinShift, 0, minDelay))
-        wfMiddle_C.append(pigpio.pulse(0, bitWisePinShift, minDelay))       
+                bitmask += int(1<<sortedShades[i].motor.stepPin)
+        wfMiddle_C.append(pigpio.pulse(bitmask, 0, minDelay))
+        wfMiddle_C.append(pigpio.pulse(0, bitmask, minDelay))       
     #jge - remove the shade that has had steps used up
     sortedShades.remove(sortedShades[0])
     stepsAlreadyTaken += (wfMiddle_C_LoopCount * 256) + wfMiddle_C_Singles
@@ -296,14 +293,14 @@ def newSchoolPresetGoer():
 
     if (sortedShades[0].motor.stepsToDest > stepsAlreadyTaken):
         #jge - if the least steps are more than the start ramp, it means all are
-        bitWisePinShift = ''
+        bitmask = 0
         for i, thisShade in enumerate(sortedShades):
-            if (str(bitWisePinShift) == ''):
-                bitWisePinShift = sortedShades[i].motor.stepPin
+            if (bitmask == 0):
+                bitmask = int(1<<sortedShades[i].motor.stepPin)
             else:
-                bitWisePinShift += sortedShades[i].motor.stepPin
-        wfMiddle_D.append(pigpio.pulse(bitWisePinShift, 0, minDelay))
-        wfMiddle_D.append(pigpio.pulse(0, bitWisePinShift, minDelay))       
+                bitmask += int(1<<sortedShades[i].motor.stepPin)
+        wfMiddle_D.append(pigpio.pulse(bitmask, 0, minDelay))
+        wfMiddle_D.append(pigpio.pulse(0, bitmask, minDelay))       
     #jge - remove the shade that has had steps used up
     
     #jge - end middle wave construction
