@@ -7,100 +7,12 @@ import termios
 import RPi.GPIO as GPIO #jge - using for step count movement
 import operator #jge - used to find max array value and member
 
-class Environment():
-    #jge - housekeeping?
-
-    def __init__(self, microstep, modePin1 = 0, modePin2 = 0, modePin3 = 0, maxDelay = 0, minDelay = 0, stepSize = 0):
-        self.getSettings()
-        self.commonPinSetup(microstep, modePin1 = 0, modePin2 = 0, modePin3 = 0)
-        #jge - maxDelay is the lowest frequency between pulses
-        self.maxDelay = maxDelay
-        #jge - minDelay is the quickest pace
-        self.minDelay = minDelay
-        #jge - how much to gain between high and low frequencies
-        self.stepSize = stepSize
-
-    def getSettings(self):
-        #jge - this has to do with setting up keyboard input
-        #jge - making this change is what goofs up the format
-        #jge - when making print statements.         
-
-        self.orig_settings = termios.tcgetattr(sys.stdin)
-        tty.setraw(sys.stdin) 
-
-    def restoreSettings(self):
-        termios.tcsetattr(sys.stdin, termios.TCSADRAIN, self.orig_settings)
-
-    def commonPinSetup(self, microstep, modePin1 = 0, modePin2 = 0, modePin3 = 0):
-        #jge - As wired now, these GPIO pins are shared by all motor drivers.
-        #jge - Doesn't seem like there will be a need for motors to use different
-        #jge - microstepping values.  Also, I don't think there are enough pins on 
-        #jge - the pi to accomodate.  
-
-        self.mode = (modePin1, modePin2, modePin3)
-
-        self.resolution = {'Full': (0, 0, 0),
-                      'Half': (1, 0, 0),
-                      '1/4': (0, 1, 0),
-                      '1/8': (1, 1, 0),
-                      '1/16': (0, 0, 1),
-                      '1/32': (1, 0, 1)}
-
-        for i in range(3):
-            pi.write(self.mode[i], self.resolution[microstep][i])
-
-class Motor():
-    def __init__(self, sleepPin = 0, dirPin = 0, stepPin = 0, direction = 0, name = ''):
-        self.sleepPin = sleepPin
-        self.dirPin = dirPin
-        self.stepPin = stepPin
-        self.direction = direction
-        self.name = name
-        self.stepsToDest = 0
-        print('Created ' + self.name)
-
-    def move(self, direction):
-        self.wakeUp()
-        pi.write(self.sleepPin, 1)
-        pi.write(self.dirPin, direction)
-        pi.write(self.stepPin, 1)
-        pi.set_PWM_dutycycle(self.stepPin, 128)  # PWM 1/2 On 1/2 Off
-        pi.set_PWM_frequency(self.stepPin, 500)
-        sleep(.05)
-        
-    def stop(self):
-        #jge - stop motion then sleep
-        pi.write(self.stepPin, 0)
-        pi.write(self.sleepPin, 0)   
-        self.sleep()
-        
-    def sleep(self):
-        #jge - this turns off motor voltage
-        pi.write(self.sleepPin, 0)
-        
-    def wakeUp(self):
-        #jge - this restores power to the motor
-        pi.write(self.sleepPin, 1)
-
-class Shade():
-    def __init__(self, motor, name = ''):
-        self.motor = motor
-        self.name = name
-        print('Created ' + self.name)
-
-    #def move(self, displayMessage, direction):
-    #    self.motor.move(direction)
-    #    print(displayMessage)
-
-    #def stop(self, displayMessage):
-    #    self.motor.stop()
-    #    print(displayMessage)
-
-class AllShades():
+class Unit():
     #jge - store the collection of shades for common methods
 
-    def __init__(self, initShades = []):
+    def __init__(self, initShades = [], environment = None):
         self.allShades = initShades
+        self.environment = environment
 
     def wakeUp(self):
         for i, thisShade in enumerate(self.allShades):
@@ -113,7 +25,33 @@ class AllShades():
     def sleep(self):
         for i, thisShade in enumerate(self.allShades):
             thisShade.motor.sleep()
+            
+    def uncoverAll(self):
+        leftShade.motor.move(1)
+        rightShade.motor.move(1)
+        topShade.motor.move(1)
+        botShade.motor.move(0)
 
+    def coverAll(self):
+        leftShade.motor.move(0)
+        rightShade.motor.move(0)
+        topShade.motor.move(0)
+        botShade.motor.move(1)
+
+    def stopAll(self):
+        for i, thisShade in enumerate(unit.allShades):
+            print('Stopping ' + thisShade.name)
+            thisShade.motor.stop()
+
+    def cleanup(self):
+        self.environment.restoreSettings()
+
+        for i, thisShade in enumerate(self.allShades):
+            print('Shutting down ' +  thisShade.name)
+            thisShade.motor.stop()
+
+        pi.stop()
+            
     def getPresetPositions(self, presetNo):
         #jge - take the preset number and get the steps for each from zero
 
@@ -124,17 +62,17 @@ class AllShades():
             rightShade.motor.stepsToDest = 4100
             topShade.motor.stepsToDest = 3200
             botShade.motor.stepsToDest = 2500
-        elif (preset == 2):
+        elif (presetNo == 2):
             leftShade.motor.stepsToDest = 2500
             rightShade.motor.stepsToDest = 4100
             topShade.motor.stepsToDest = 3200
             botShade.motor.stepsToDest = 1900
-        elif (preset == 2):
+        elif (presetNo == 2):
             leftShade.motor.stepsToDest = 4100
             rightShade.motor.stepsToDest = 5000
             topShade.motor.stepsToDest = 3200
             botShade.motor.stepsToDest = 2500
-        elif (preset == 4):
+        elif (presetNo == 4):
             leftShade.motor.stepsToDest = 2500
             rightShade.motor.stepsToDest = 3200
             topShade.motor.stepsToDest = 4100
@@ -144,11 +82,11 @@ class AllShades():
     def gotoPreset(self, presetNo):
         ################################
         #jge - temp variables for dev
-        shades.wakeUp()
+        unit.wakeUp()
         self.getPresetPositions(presetNo)
-        maxDelay = environment.maxDelay
-        minDelay = environment.minDelay
-        step = environment.stepSize
+        maxDelay = unit.environment.maxDelay
+        minDelay = unit.environment.minDelay
+        step = unit.environment.stepSize
         #jge - end temp variables for dev
         ################################
 
@@ -160,7 +98,7 @@ class AllShades():
 
         #jge - sort the shades by least steps to travel
         
-        sortedShades = sorted(shades.allShades, key=lambda x: x.motor.stepsToDest, reverse=False)
+        sortedShades = sorted(unit.allShades, key=lambda x: x.motor.stepsToDest, reverse=False)
             
         wfStart_A = []
         pulseCount = 0
@@ -249,9 +187,9 @@ class AllShades():
 
     def buildMiddleWave(self, stepsAlreadyTaken, sortedShades):
         #jge - create a slice of the steady state wave
-        minDelay = environment.minDelay
-        maxDelay = environment.maxDelay
-        step = environment.stepSize
+        minDelay = unit.environment.minDelay
+        maxDelay = unit.environment.maxDelay
+        step = unit.environment.stepSize
         
         print('bmw 1 = ' + str(stepsAlreadyTaken))
         print('bmw 2 = ' + str(len(sortedShades)))
@@ -288,28 +226,101 @@ class AllShades():
             wfMiddle_Slice.append(pigpio.pulse(0, bitmask, minDelay))            
 
         return wfMiddle_Slice, wfMiddle_Slice_LoopCount, wfMiddle_Slice_Singles
-
-    #jge - end refactor
-    ###################################################
-            
+    #jge - end unit class
     
+class Environment():
+    #jge - housekeeping?
+
+    def __init__(self, microstep, modePin1 = 0, modePin2 = 0, modePin3 = 0, maxDelay = 0, minDelay = 0, stepSize = 0):
+        self.getSettings()
+        self.commonPinSetup(microstep, modePin1 = 0, modePin2 = 0, modePin3 = 0)
+        #jge - maxDelay is the lowest frequency between pulses
+        self.maxDelay = maxDelay
+        #jge - minDelay is the quickest pace
+        self.minDelay = minDelay
+        #jge - how much to gain between high and low frequencies
+        self.stepSize = stepSize
+
+    def getSettings(self):
+        #jge - this has to do with setting up keyboard input
+        #jge - making this change is what goofs up the format
+        #jge - when making print statements.         
+
+        self.orig_settings = termios.tcgetattr(sys.stdin)
+        tty.setraw(sys.stdin) 
+
+    def restoreSettings(self):
+        termios.tcsetattr(sys.stdin, termios.TCSADRAIN, self.orig_settings)
+
+    def commonPinSetup(self, microstep, modePin1 = 0, modePin2 = 0, modePin3 = 0):
+        #jge - As wired now, these GPIO pins are shared by all motor drivers.
+        #jge - Doesn't seem like there will be a need for motors to use different
+        #jge - microstepping values.  Also, I don't think there are enough pins on 
+        #jge - the pi to accomodate.  
+
+        self.mode = (modePin1, modePin2, modePin3)
+
+        self.resolution = {'Full': (0, 0, 0),
+                      'Half': (1, 0, 0),
+                      '1/4': (0, 1, 0),
+                      '1/8': (1, 1, 0),
+                      '1/16': (0, 0, 1),
+                      '1/32': (1, 0, 1)}
+
+        for i in range(3):
+            pi.write(self.mode[i], self.resolution[microstep][i])
+
+class Motor():
+    def __init__(self, sleepPin = 0, dirPin = 0, stepPin = 0, direction = 0, name = ''):
+        self.sleepPin = sleepPin
+        self.dirPin = dirPin
+        self.stepPin = stepPin
+        self.direction = direction
+        self.name = name
+        self.stepsToDest = 0
+        print('Created ' + self.name)
+
+    def move(self, direction):
+        self.wakeUp()
+        pi.write(self.sleepPin, 1)
+        pi.write(self.dirPin, direction)
+        pi.write(self.stepPin, 1)
+        pi.set_PWM_dutycycle(self.stepPin, 128)  # PWM 1/2 On 1/2 Off
+        pi.set_PWM_frequency(self.stepPin, 500)
+        sleep(.05)
+        
+    def stop(self):
+        #jge - stop motion then sleep
+        pi.write(self.stepPin, 0)
+        pi.write(self.sleepPin, 0)   
+        self.sleep()
+        
+    def sleep(self):
+        #jge - this turns off motor voltage
+        pi.write(self.sleepPin, 0)
+        
+    def wakeUp(self):
+        #jge - this restores power to the motor
+        pi.write(self.sleepPin, 1)
+
+class Shade():
+    def __init__(self, motor, name = ''):
+        self.motor = motor
+        self.name = name
+        print('Created ' + self.name)
+            
 #################################################################
 #jge - init
 
 pi = pigpio.pi() # Connect to pigpiod daemon
 if not pi.connected:
    exit(0)
-
 ##########################################################
-#jge - Environment constructor - setup common properties
-#jge - 1st argument = Microstep Mode
-#jge - 2nd argument =
-#jge - 3rd argument =
-#jge - 4th argument = Maximum microsecond delay between preset going pulses
-#jge - 5th argument = Minimum ""
-#jge - 6th argument - How much to gain between the min and max in each loop  
-environment = Environment('Full', 14, 15, 18, 1100, 400, 1) 
-
+#jge - Motor constructors 
+#jge - 1st argument = sleep Pin
+#jge - 2nd argument = dir Pin
+#jge - 3rd argument = step pin
+##########################################################
 leftMotor = Motor(6, 26, 19, 0, 'motor 3')
 leftShade = Shade(leftMotor, 'left shade')
 
@@ -322,10 +333,18 @@ topShade = Shade(topMotor, 'top shade')
 botMotor = Motor(13, 20, 21, 0, 'motor 4')
 botShade = Shade(botMotor, 'bottom shade')
 
-shades = AllShades([leftShade, rightShade, topShade, botShade])
-
-#jge - end init
+##########################################################
+#jge - Environment constructor - setup common properties
+#jge - 1st argument = Microstep Mode - Full, 1/2, 1/4, 1/8, 1/16, 1/32
+#jge - 2nd argument = Mode pin 1 - shared by all motor drivers
+#jge - 3rd argument = Mode pin 2 - shared by all motor drivers
+#jge - 4th argument = Mode pin 3 - shared by all motor drivers
+#jge - 5th argument = Maximum microsecond delay between preset going pulses
+#jge - 6th argument = Minimum ""
+#jge - 7th argument - How much to gain between the min and max in each loop  
 #################################################################
+environment = Environment('Full', 14, 15, 18, 1100, 400, 1) 
+unit = Unit([leftShade, rightShade, topShade, botShade], environment)
 
 #################################################################
 #jge - This would be main.  Infinite loop to check for user input
@@ -373,39 +392,45 @@ try:
         elif (dirKey ==  'k'):
             print('Right Stop')
             rightShade.motor.stop()
+            
         elif (dirKey == 'z'):
-            #print('Uncovering All')
-            leftShade.motor.move(1)
-            rightShade.motor.move(1)
-            topShade.motor.move(1)
-            botShade.motor.move( 0)
+            print('Uncovering All')
+            unit.uncoverAll()
+
         elif (dirKey == 'x'):
-            #print('Covering All')
-            leftShade.motor.move(0)
-            rightShade.motor.move(0)
-            topShade.motor.move(0)
-            botShade.motor.move(1) 
+            print('Covering All')
+            unit.coverAll()
+            
         elif (dirKey == 'p'):
             print('All Stop')
-            for i, thisShade in enumerate(shades.allShades):
-                thisShade.stop('Stopping ' + thisShade.name)
+            unit.stopAll()
+
+        elif (dirKey == '1'):
+            print('Goto preset 1')
+            unit.gotoPreset(1)
+
+        elif (dirKey == '2'):
+            print('Goto preset 2')
+            unit.gotoPreset(2)
+
+        elif (dirKey == '3'):
+            print('Goto preset 3')
+            unit.gotoPreset(3)
+
+        elif (dirKey == '4'):
+            print('Goto preset 4')
+            unit.gotoPreset(4)
+            
         elif (dirKey == 'q'):
             raise Exception('Quitting')
-        elif (dirKey == '1'):
-            print('Goto preset')
-            shades.gotoPreset(1)
+    
         else:
             pass
 except Exception as e :
     print ('\nOh goooood for you')
     raise
 finally:
-    environment.restoreSettings()
-
-    for i, thisShade in enumerate(shades.allShades):
-        thisShade.motor.stop('Shutting down ' + thisShade.name)
-
-    pi.stop()
+    unit.cleanup()
 
 #jge - end main loop
 ############################################
