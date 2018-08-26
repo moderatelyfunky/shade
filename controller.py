@@ -18,10 +18,6 @@ class Unit():
         for i, thisShade in enumerate(self.allShades):
             thisShade.motor.wakeUp()
 
-    def stopAll(self):
-        for i, thisShade in enumerate(self.allShades):
-            thisShade.motor.stop()
-
     def sleepAll(self):
         for i, thisShade in enumerate(self.allShades):
             thisShade.motor.sleep()
@@ -52,9 +48,9 @@ class Unit():
 
         pi.stop()
 
-    def setPresetPositions(self)
+    #def setPresetPositions(self):
         #jge - todo: some future method to save current step counts
-    
+        
     def getPresetPositions(self, presetNo):
         #jge - todo : take the preset number and get the steps for each from zero
 
@@ -193,7 +189,8 @@ class Unit():
         pi.wave_delete(middleWave_A)
         pi.wave_delete(middleWave_B)
         pi.wave_delete(middleWave_C)
-        pi.wave_delete(middleWave_D)    
+        pi.wave_delete(middleWave_D)
+        self.sleepAll()
 
     def buildMiddleWave(self, stepsAlreadyTaken, sortedShades):
         #jge - This method will build an array of pulses for the
@@ -295,29 +292,60 @@ class HomeSwitch():
         print('Created ' + self.name)
 
 class Motor():
-    def __init__(self, sleepPin = 0, dirPin = 0, stepPin = 0, direction = 0, name = ''):
+    def __init__(self, sleepPin = 0, dirPin = 0, stepPin = 0, direction = 0, name = '', coverDirection = 0):
         self.sleepPin = sleepPin
         self.dirPin = dirPin
         self.stepPin = stepPin
         self.direction = direction
         self.name = name
         self.stepsToDest = 0
+        self.stepsFromHomeObject = 0
+        self.stepsFromHomeCount = 0
+        self.coverDirection = coverDirection
         print('Created ' + self.name)
 
     def move(self, direction):
-        self.wakeUp()
-        pi.write(self.sleepPin, 1)
-        pi.write(self.dirPin, direction)
-        pi.write(self.stepPin, 1)
-        pi.set_PWM_dutycycle(self.stepPin, 128)  # PWM 1/2 On 1/2 Off
-        pi.set_PWM_frequency(self.stepPin, 500)
-        sleep(.05)
-        
+        #jge - make sure it's not running against the wide open stops
+        print('Duuuuuuuuuuuuu ' + str(self.stepsFromHomeCount))
+        if (direction == self.coverDirection or (direction != self.coverDirection and self.stepsFromHomeCount > 0)):
+            self.direction = direction
+            self.wakeUp()
+            pi.write(self.sleepPin, 1)
+            pi.write(self.dirPin, direction)
+            pi.write(self.stepPin, 1)
+            pi.set_PWM_dutycycle(self.stepPin, 128)  # PWM 1/2 On 1/2 Off
+            pi.set_PWM_frequency(self.stepPin, 500)
+            #jge - start the counter while the motor is in motion
+            self.stepsFromHomeObject = pi.callback(self.stepPin, pigpio.RISING_EDGE, self.callbackFunc)
+            sleep(.1)
+        else:
+            print('wide open bro')
+
+    def callbackFunc(self, gpio, level, tick):     
+        #jge - figure out whether to add or subtract the steps
+        if (self.direction == self.coverDirection):
+            self.stepsFromHomeCount += 1 
+        else:
+            self.stepsFromHomeCount -= 1
+        print(str(self.stepsFromHomeCount))
+
+        #jge - stop the move if it's wide open
+        if (self.stepsFromHomeCount == 0 and self.direction != self.coverDirection):
+            self.stop()
+            print('Stopping motor because it is wide open')
+            
     def stop(self):
         #jge - stop motion then sleep
         pi.write(self.stepPin, 0)
-        pi.write(self.sleepPin, 0)   
+        pi.write(self.sleepPin, 0)
+
+        #jge - turn off the callback - make sure it's been instantiated
+        if (type(self.stepsFromHomeObject) is pigpio._callback):
+            self.stepsFromHomeObject.cancel()
+
+        print(self.name + ' steps from home = ' + str(self.stepsFromHomeCount))
         self.sleep()
+ 
         
     def sleep(self):
         #jge - this turns off motor voltage
@@ -338,22 +366,24 @@ if not pi.connected:
 #jge - 1st argument = sleep Pin
 #jge - 2nd argument = dir Pin
 #jge - 3rd argument = step pin
+#jge - 4th argument = name
+#jge - 5th argument = Cover direction - so can compare when +- steps
 #jge - HomeSwitch constructors.  1st arg - gpio
 ##########################################################
 leftHomeSwitch = HomeSwitch(1, 'left home switch')
-leftMotor = Motor(6, 26, 19, 0, 'motor 3')
+leftMotor = Motor(6, 26, 19, 0, 'motor 3', 0)
 leftShade = Shade(leftMotor, leftHomeSwitch, 'left shade')
 
 rightHomeSwitch = HomeSwitch(1, 'right home switch')
-rightMotor = Motor(12, 24, 23, 0, 'motor 1')
+rightMotor = Motor(12, 24, 23, 0, 'motor 1', 0)
 rightShade = Shade(rightMotor, rightHomeSwitch, 'right shade')
 
 topHomeSwitch = HomeSwitch(1, 'top home switch')
-topMotor = Motor(5, 27, 17, 0, 'motor 2')
+topMotor = Motor(5, 27, 17, 0, 'motor 2', 0)
 topShade = Shade(topMotor, topHomeSwitch, 'top shade')
 
 botHomeSwitch = HomeSwitch(1, 'bottom home switch')
-botMotor = Motor(13, 20, 21, 0, 'motor 4')
+botMotor = Motor(13, 20, 21, 0, 'motor 4', 1)
 botShade = Shade(botMotor, botHomeSwitch, 'bottom shade')
 
 ##########################################################
