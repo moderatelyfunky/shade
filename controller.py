@@ -53,48 +53,22 @@ class Unit():
         #jge - todo: some future method to save current step counts
         
     def getPresetPositions(self, presetNo):
-        #####################################
-        #jge - hard coded dev magic for now
-
-        if (presetNo == 1):          
-            leftShade.preset.append(5000)
-            rightShade.preset.append(4100)
-            topShade.preset.append(3200)
-            botShade.preset.append(2500)
-        elif (presetNo == 2):
-            leftShade.preset[1] = 5000
-            rightShade.preset[1] = 4100
-            topShade.preset[1] = 3200
-            botShade.preset[1] = 2500
-        elif (presetNo == 2):
-            leftShade.preset[2] = 5000
-            rightShade.preset[2] = 4100
-            topShade.preset[2] = 3200
-            botShade.preset[2] = 2500
-        elif (presetNo == 4):
-            leftShade.preset[3] = 5000
-            rightShade.preset[3] = 4100
-            topShade.preset[3] = 3200
-            botShade.preset[3] = 2500             
-        ################################
-        
         #jge - Use the preset number to retrieve the positions for each 
+
         for i, thisShade in enumerate(unit.allShades):
-            #jge - determine the difference between current and preset
             theDestination = unit.allShades[i].preset[presetNo - 1]
-            print('theDestination for ' + unit.allShades[i].name + str(theDestination))
-            #jge - set the direction pin of each motor, also set stepsToDest
-            #jge - which is used in the wave creation.  
+
+            #jge - set the direction pin of each motor object also
+            #jge - write to the gpio pin to set the direction and 
+            #jge - set stepsToDest which is used in the wave creation.  
             if (theDestination > unit.allShades[i].motor.stepsFromHomeCount):
                 unit.allShades[i].motor.direction = unit.allShades[i].motor.coverDirection
+                pi.write(unit.allShades[i].motor.dirPin, unit.allShades[i].motor.coverDirection)
                 unit.allShades[i].motor.stepsToDest = theDestination - unit.allShades[i].motor.stepsFromHomeCount
             else:
                 unit.allShades[i].motor.direction = unit.allShades[i].motor.uncoverDirection
+                pi.write(unit.allShades[i].motor.dirPin, unit.allShades[i].motor.uncoverDirection)
                 unit.allShades[i].motor.stepsToDest = unit.allShades[i].motor.stepsFromHomeCount - theDestination 
-
-            #jge - Even though it hasn't happened yet, assume the best
-            #jge - and update the stepsFromHomeCount            
-            #unit.allShades[i].motor.stepsFromHomeCount = theDestination
             
     def gotoPreset(self, presetNo):
         ################################
@@ -111,7 +85,7 @@ class Unit():
         tempSortedShades = sorted(unit.allShades, key=lambda x: x.motor.stepsToDest, reverse=False)
         sortedShades = []
 
-        #jge - there is a better way to do this
+        #jge - there must be a better way to do this
         for i, thisShade in enumerate(tempSortedShades):
             #jge - forget about shades who may already be in position
             if (tempSortedShades[i].motor.stepsToDest != 0):
@@ -140,8 +114,7 @@ class Unit():
 
         
         stepsAlreadyTaken = pulseCount
-        #stepsAlreadyTaken = len(wfStart)
-        print('wfStart length = ' + str(len(wfStart)))
+
         #jge - remove any shades who may have no more steps left
         for i, thisShade in enumerate(sortedShades):
             if (sortedShades[i].motor.stepsToDest <= stepsAlreadyTaken):
@@ -175,43 +148,36 @@ class Unit():
         wfMiddle_D_Singles = 0
         wfMiddle_D_LoopCount = 0
         
-        print('length of sortedShades = ' + str(len(sortedShades)))
-        for i, thisShade in enumerate(sortedShades):
-            print('this shade is still in the running ' + sortedShades[i].name)
-
         #jge - it's possible that the ramp used up all the steps
         if (len(sortedShades) > 0):
             wfMiddle_A, wfMiddle_A_LoopCount, wfMiddle_A_Singles = self.buildMiddleWave(stepsAlreadyTaken, sortedShades)    
             sortedShades.remove(sortedShades[0])
             stepsAlreadyTaken += (wfMiddle_A_LoopCount * 256) + wfMiddle_A_Singles
-            print('middle a stepsAlreadyTaken = ' + str(stepsAlreadyTaken))
 
         if (len(sortedShades) > 0):
             wfMiddle_B, wfMiddle_B_LoopCount, wfMiddle_B_Singles = self.buildMiddleWave(stepsAlreadyTaken, sortedShades)    
             sortedShades.remove(sortedShades[0])
             stepsAlreadyTaken += (wfMiddle_B_LoopCount * 256) + wfMiddle_B_Singles
-            print('middle b stepsAlreadyTaken = ' + str(stepsAlreadyTaken))
 
         if (len(sortedShades) > 0):
             wfMiddle_C, wfMiddle_C_LoopCount, wfMiddle_C_Singles = self.buildMiddleWave(stepsAlreadyTaken, sortedShades)    
             sortedShades.remove(sortedShades[0])
             stepsAlreadyTaken += (wfMiddle_C_LoopCount * 256) + wfMiddle_C_Singles
-            print('middle c stepsAlreadyTaken = ' + str(stepsAlreadyTaken))
 
         if (len(sortedShades) > 0):
             wfMiddle_D, wfMiddle_D_LoopCount, wfMiddle_D_Singles = self.buildMiddleWave(stepsAlreadyTaken, sortedShades)    
             sortedShades.remove(sortedShades[0])
             stepsAlreadyTaken += (wfMiddle_D_LoopCount * 256) + wfMiddle_D_Singles
-            print('middle d stepsAlreadyTaken = ' + str(stepsAlreadyTaken))
 
         #jge - Clear out any waves that may not have been cleaned up
         pi.wave_clear()
 
         #jge - Use Wave_add_generic to "convert" the arrays of pulses
-        #jge - into waves that will be fed to pigpio with the wave_chain method
+        #jge - into waves that will be fed to pigpio with the wave_chain
+        #jge - method
         pi.wave_add_generic(wfStart)
 
-        #jge - make sure won't get empty wave error
+        #jge - make sure won't get empty wave errors
         if (len(wfStart) > 0):
             startRamp = pi.wave_create()
 
@@ -379,7 +345,7 @@ class Motor():
         self.sleepPin = sleepPin
         self.dirPin = dirPin
         self.stepPin = stepPin
-        self.direction = direction
+        self.direction = coverDirection
         self.name = name
         self.stepsToDest = 0
         self.stepsFromHomeObject = None
@@ -403,9 +369,12 @@ class Motor():
             pi.set_PWM_frequency(self.stepPin, 500)
             sleep(.05)
         else:
-            print('Cant open any further')
+            print('Cant open ' + self.name + ' any further')
 
         """
+        #jge - keeping this block around to easily comment the block above
+        #jge - when the shades are not in zero positions, but the program
+        #jge - thinks they are and won't allow them to be rolled up
         self.direction = direction
         self.wakeUp()
         pi.write(self.sleepPin, 1)
@@ -419,15 +388,14 @@ class Motor():
     def callbackFunc(self, gpio, level, tick):     
         #jge - figure out whether to add or subtract the steps
         if (self.direction == self.coverDirection):
-            self.stepsFromHomeCount += 1 
+            self.stepsFromHomeCount += 1
         else:
             self.stepsFromHomeCount -= 1
-        #print(str(self.stepsFromHomeCount))
 
         #jge - stop the move if it's wide open
         if (self.stepsFromHomeCount == 0 and self.direction != self.coverDirection):
             self.stop()
-            print('Stopping motor because it is wide open')
+            print('Stopping motor ' + self.name + 'because the shade is wide open')
             
     def stop(self):
         #jge - stop motion then sleep
@@ -474,6 +442,31 @@ topShade = Shade(topMotor, topHomeSwitch, 'top shade')
 botHomeSwitch = HomeSwitch(1, 'bottom home switch')
 botMotor = Motor(13, 20, 21, 0, 'motor 4', 1, 0)
 botShade = Shade(botMotor, botHomeSwitch, 'bottom shade')
+
+#####################################
+#jge - hard coded preset building for now
+         
+leftShade.preset.append(5000)
+rightShade.preset.append(4100)
+topShade.preset.append(3200)
+botShade.preset.append(2500)
+
+leftShade.preset.append(8000)
+rightShade.preset.append(500)
+topShade.preset.append(100)
+botShade.preset.append(100)
+
+leftShade.preset.append(5000)
+rightShade.preset.append(4000)
+topShade.preset.append(3000)
+botShade.preset.append(2000)
+
+leftShade.preset.append(7000)
+rightShade.preset.append(7000)
+topShade.preset.append(7000)
+botShade.preset.append(7000)           
+################################
+
 
 ##########################################################
 #jge - Environment constructor - setup common properties
