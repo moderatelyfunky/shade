@@ -1,5 +1,3 @@
-#jge - committing this with a tag from Windows 
-#du
 from time import sleep
 import pigpio
 import time
@@ -7,26 +5,308 @@ import tty
 import sys
 import termios
 import RPi.GPIO as GPIO #jge - using for step count movement
+import operator #jge - used to find max array value and member
 
+class Unit():
+    #jge - store the collection of shades for common methods
+
+    def __init__(self, initShades = [], environment = None):
+        self.allShades = initShades
+        self.environment = environment
+
+    def wakeUpAll(self):
+        for i, thisShade in enumerate(self.allShades):
+            thisShade.motor.wakeUp()
+
+    def sleepAll(self):
+        for i, thisShade in enumerate(self.allShades):
+            thisShade.motor.sleep()
+            
+    def uncoverAll(self):
+        leftShade.motor.move(1)
+        rightShade.motor.move(1)
+        topShade.motor.move(1)
+        botShade.motor.move(0)
+
+    def coverAll(self):
+        leftShade.motor.move(0)
+        rightShade.motor.move(0)
+        topShade.motor.move(0)
+        botShade.motor.move(1)
+
+    def stopAll(self):
+        for i, thisShade in enumerate(unit.allShades):
+            print('Stopping ' + thisShade.name)           
+            print(self.allShades[i].name + ' steps from home = ' + str(self.allShades[i].motor.stepsFromHomeCount))
+            thisShade.motor.stop()
+
+    def cleanup(self):
+        self.environment.restoreSettings()
+
+        for i, thisShade in enumerate(self.allShades):
+            print('Shutting down ' +  thisShade.name)
+            thisShade.motor.stop()
+
+        pi.stop()
+
+    #def setPresetPositions(self):
+        #jge - todo: some future method to save current step counts
+        
+    def getPresetPositions(self, presetNo):
+        #jge - Use the preset number to retrieve the positions for each 
+
+        for i, thisShade in enumerate(unit.allShades):
+            theDestination = unit.allShades[i].preset[presetNo - 1]
+
+            #jge - set the direction pin of each motor object also
+            #jge - write to the gpio pin to set the direction and 
+            #jge - set stepsToDest which is used in the wave creation.  
+            if (theDestination > unit.allShades[i].motor.stepsFromHomeCount):
+                unit.allShades[i].motor.direction = unit.allShades[i].motor.coverDirection
+                pi.write(unit.allShades[i].motor.dirPin, unit.allShades[i].motor.coverDirection)
+                unit.allShades[i].motor.stepsToDest = theDestination - unit.allShades[i].motor.stepsFromHomeCount
+            else:
+                unit.allShades[i].motor.direction = unit.allShades[i].motor.uncoverDirection
+                pi.write(unit.allShades[i].motor.dirPin, unit.allShades[i].motor.uncoverDirection)
+                unit.allShades[i].motor.stepsToDest = unit.allShades[i].motor.stepsFromHomeCount - theDestination 
+            
+    def gotoPreset(self, presetNo):
+        ################################
+        #jge - preset init 
+        unit.wakeUpAll()
+        self.getPresetPositions(presetNo)
+        maxDelay = unit.environment.maxDelay
+        minDelay = unit.environment.minDelay
+        step = unit.environment.stepSize
+        #jge - end preset init
+        ################################
+
+        #jge - sort the shades by least steps to travel
+        tempSortedShades = sorted(unit.allShades, key=lambda x: x.motor.stepsToDest, reverse=False)
+        sortedShades = []
+
+        #jge - there must be a better way to do this
+        for i, thisShade in enumerate(tempSortedShades):
+            #jge - forget about shades who may already be in position
+            if (tempSortedShades[i].motor.stepsToDest != 0):
+                sortedShades.append(tempSortedShades[i])
+                      
+        #jge - build the starting ramp of the wave.  Only add the pins
+        #jge - for the shades that still have steps to move.  The bitmask 
+        #jge - is the container for all the pins that will be set high.
+        #jge - It's an integer that is picked apart later by pigpio.
+        
+        wfStart = []
+        pulseCount = 0
+        for delay in range(maxDelay, minDelay, -step):
+            bitmask = 0
+            pulseCount += 1
+            for i, thisShade in enumerate(sortedShades):
+                if (thisShade.motor.stepsToDest > pulseCount):
+                    if (bitmask == 0):
+                        bitmask = int(1<<sortedShades[i].motor.stepPin)
+                    else:
+                        bitmask += int(1<<sortedShades[i].motor.stepPin)
+                
+            #jge - now build the pulse and add it to the array
+            wfStart.append(pigpio.pulse(bitmask, 0, delay))
+            wfStart.append(pigpio.pulse(0, bitmask, delay))
+
+        
+        stepsAlreadyTaken = pulseCount
+
+        #jge - remove any shades who may have no more steps left
+        for i, thisShade in enumerate(sortedShades):
+            if (sortedShades[i].motor.stepsToDest <= stepsAlreadyTaken):
+                sortedShades[i].motor.stepsToDest = 0
+                sortedShades.remove(sortedShades[i])
+                
+        #jge - Build a wave that has the steady state pulses for all
+        #jge - until the shade with the least steps is at its goal.
+        #jge - Then remove that shade from the array and build for
+        #jge - the rest until the step count is reached for the shade 
+        #jge - with the next least amount of steps.  Do it two more times
+
+        wfMiddle_A = []
+        wfMiddle_B = []
+        wfMiddle_C = []
+        wfMiddle_D = []
+        
+        middleWave_A = 0
+        wfMiddle_A_Singles = 0
+        wfMiddle_A_LoopCount = 0
+
+        middleWave_B = 0
+        wfMiddle_B_Singles = 0
+        wfMiddle_B_LoopCount = 0
+        
+        middleWave_C = 0
+        wfMiddle_C_Singles = 0
+        wfMiddle_C_LoopCount = 0
+        
+        middleWave_D = 0
+        wfMiddle_D_Singles = 0
+        wfMiddle_D_LoopCount = 0
+        
+        #jge - it's possible that the ramp used up all the steps
+        if (len(sortedShades) > 0):
+            wfMiddle_A, wfMiddle_A_LoopCount, wfMiddle_A_Singles = self.buildMiddleWave(stepsAlreadyTaken, sortedShades)    
+            sortedShades.remove(sortedShades[0])
+            stepsAlreadyTaken += (wfMiddle_A_LoopCount * 256) + wfMiddle_A_Singles
+
+        if (len(sortedShades) > 0):
+            wfMiddle_B, wfMiddle_B_LoopCount, wfMiddle_B_Singles = self.buildMiddleWave(stepsAlreadyTaken, sortedShades)    
+            sortedShades.remove(sortedShades[0])
+            stepsAlreadyTaken += (wfMiddle_B_LoopCount * 256) + wfMiddle_B_Singles
+
+        if (len(sortedShades) > 0):
+            wfMiddle_C, wfMiddle_C_LoopCount, wfMiddle_C_Singles = self.buildMiddleWave(stepsAlreadyTaken, sortedShades)    
+            sortedShades.remove(sortedShades[0])
+            stepsAlreadyTaken += (wfMiddle_C_LoopCount * 256) + wfMiddle_C_Singles
+
+        if (len(sortedShades) > 0):
+            wfMiddle_D, wfMiddle_D_LoopCount, wfMiddle_D_Singles = self.buildMiddleWave(stepsAlreadyTaken, sortedShades)    
+            sortedShades.remove(sortedShades[0])
+            stepsAlreadyTaken += (wfMiddle_D_LoopCount * 256) + wfMiddle_D_Singles
+
+        #jge - Clear out any waves that may not have been cleaned up
+        pi.wave_clear()
+
+        #jge - Use Wave_add_generic to "convert" the arrays of pulses
+        #jge - into waves that will be fed to pigpio with the wave_chain
+        #jge - method
+        pi.wave_add_generic(wfStart)
+
+        #jge - make sure won't get empty wave errors
+        if (len(wfStart) > 0):
+            startRamp = pi.wave_create()
+
+        if (len(wfMiddle_A) > 0):
+            pi.wave_add_generic(wfMiddle_A)
+            middleWave_A = pi.wave_create()
+
+        if (len(wfMiddle_B) > 0):
+            pi.wave_add_generic(wfMiddle_B)
+            middleWave_B = pi.wave_create()
+
+        if (len(wfMiddle_C) > 0):
+            pi.wave_add_generic(wfMiddle_C)
+            middleWave_C = pi.wave_create()
+
+        if (len(wfMiddle_D) > 0):
+            pi.wave_add_generic(wfMiddle_D)
+            middleWave_D = pi.wave_create()
+
+        #jge - Build an array of the waves to make clean up easier
+        #allWaves = [startRamp, middleWave_A, middleWave_B, middleWave_C, middleWave_D]                                           
+
+        #jge - this is the method that pushes the waves to the motors
+        #jge - the blocks that start with 255 are loops.  The closing
+        #jge - part of the loop tells pigpio how many times to loop
+        #jge - each wave and how many single iterations of it after that 
+        pi.wave_chain([
+           startRamp,        
+           255, 0,                       
+              middleWave_A,    
+           255, 1, wfMiddle_A_Singles, wfMiddle_A_LoopCount, #loop x + y*256 times
+           255, 0,                       
+              middleWave_B,    
+           255, 1, wfMiddle_B_Singles, wfMiddle_B_LoopCount,          
+           255, 0,                       
+              middleWave_C,    
+           255, 1, wfMiddle_C_Singles, wfMiddle_C_LoopCount,       
+           255, 0,                       
+              middleWave_D,    
+           255, 1, wfMiddle_D_Singles, wfMiddle_D_LoopCount,                             
+           ])
+
+        #jge - Get control of the situation.  No more phone calls
+        while pi.wave_tx_busy():
+           time.sleep(0.1)
+
+        pigpio.exceptions = True
+
+        if (startRamp > 0):
+            pi.wave_delete(startRamp)
+        if (middleWave_A > 0):
+            pi.wave_delete(middleWave_A)
+        if (middleWave_B > 0):
+            pi.wave_delete(middleWave_B)
+        if (middleWave_C > 0):
+            pi.wave_delete(middleWave_C)
+        if (middleWave_D > 0):
+            pi.wave_delete(middleWave_D)
+
+        self.sleepAll()
+        print('Finished going to preset')
+
+    def buildMiddleWave(self, stepsAlreadyTaken, sortedShades):
+        #jge - This method will build an array of pulses for the
+        #jge - steady state portion of the movement.  It uses the
+        #jge - same pigpio features as the ramp.  The additional
+        #jge - work being done here is to figure out how many times
+        #jge - the wave should be looped and run individually.  This
+        #jge - is because pigpio has a limit of 256 iterations for
+        #jge - each wave.  Anything over that means another loop or
+        #jge - just the remainder if it's less than 256
+        
+        minDelay = unit.environment.minDelay
+        maxDelay = unit.environment.maxDelay
+        step = unit.environment.stepSize
+
+        wfMiddle = []
+
+        #jge - store the count to feed to the wave_chain looper
+        maxSingle = 256
+        countMiddle = sortedShades[0].motor.stepsToDest - stepsAlreadyTaken
+        
+        if (countMiddle > 256):
+            wfMiddle_LoopCount = int(countMiddle / maxSingle)
+            wfMiddle_Singles = countMiddle % maxSingle
+        else:
+            wfMiddle_LoopCount = 0
+            wfMiddle_Singles = countMiddle
+
+        if (sortedShades[0].motor.stepsToDest > stepsAlreadyTaken):
+            bitmask = 0
+            for i, thisShade in enumerate(sortedShades):
+                if (bitmask == 0):
+                    bitmask = int(1<<sortedShades[i].motor.stepPin)
+                else:
+                    bitmask += int(1<<sortedShades[i].motor.stepPin)
+            wfMiddle.append(pigpio.pulse(bitmask, 0, minDelay))
+            wfMiddle.append(pigpio.pulse(0, bitmask, minDelay))            
+
+        return wfMiddle, wfMiddle_LoopCount, wfMiddle_Singles
+
+    #jge - end unit class
+    ####################################################
+    
 class Environment():
-    #jge - object to handle housekeeping jobs
+    #jge - housekeeping?
 
-    def __init__(self, modePin1 = 0, modePin2 = 0, modePin3 = 0):
+    def __init__(self, microstep, modePin1 = 0, modePin2 = 0, modePin3 = 0, maxDelay = 0, minDelay = 0, stepSize = 0):
         self.getSettings()
-        self.commonPinSetup(modePin1 = 0, modePin2 = 0, modePin3 = 0)
-     
+        self.commonPinSetup(microstep, modePin1 = 0, modePin2 = 0, modePin3 = 0)
+        #jge - maxDelay is the lowest frequency between pulses
+        self.maxDelay = maxDelay
+        #jge - minDelay is the quickest pace
+        self.minDelay = minDelay
+        #jge - how much to gain between high and low frequencies
+        self.stepSize = stepSize
+
     def getSettings(self):
         #jge - this has to do with setting up keyboard input
         #jge - making this change is what goofs up the format
         #jge - when making print statements.         
-
         self.orig_settings = termios.tcgetattr(sys.stdin)
         tty.setraw(sys.stdin) 
 
     def restoreSettings(self):
+        #jge - this puts the terminal back as it was so line feeds work
         termios.tcsetattr(sys.stdin, termios.TCSADRAIN, self.orig_settings)
 
-    def commonPinSetup(self, modePin1 = 0, modePin2 = 0, modePin3 = 0):
+    def commonPinSetup(self, microstep, modePin1 = 0, modePin2 = 0, modePin3 = 0):
         #jge - As wired now, these GPIO pins are shared by all motor drivers.
         #jge - Doesn't seem like there will be a need for motors to use different
         #jge - microstepping values.  Also, I don't think there are enough pins on 
@@ -42,83 +322,164 @@ class Environment():
                       '1/32': (1, 0, 1)}
 
         for i in range(3):
-            pi.write(self.mode[i], self.resolution['Full'][i])
-
-class Motor():
-    #jge - Object to act like a motor
-
-    def __init__(self, motorSleepPin = 0, motorDirPin = 0, motorStepPin = 0, direction = 0, name = ''):
-        self.motorSleepPin = motorSleepPin
-        self.motorDirPin = motorDirPin
-        self.motorStepPin = motorStepPin
-        self.direction = direction
-        self.name = name
-        print('Created ' + self.name)
-
-    def move(self, direction):
-        self.wakeUp()
-        pi.write(self.motorSleepPin, 1)
-        pi.write(self.motorDirPin, direction)
-        pi.write(self.motorStepPin, 1)
-        pi.set_PWM_dutycycle(self.motorStepPin, 128)  # PWM 1/2 On 1/2 Off
-        pi.set_PWM_frequency(self.motorStepPin, 500)
-        sleep(.05)        
-
-    def wakeUp(self):
-        #jge - this restores power to the motor
-        pi.write(self.motorSleepPin, 1)
-
-    def sleep(self):
-        #jge - this turns off motor voltage
-        pi.write(self.motorSleepPin, 0)
-
-    def stop(self):
-        pi.write(self.motorStepPin, 0)
-        pi.write(self.motorSleepPin, 0)   
-        self.sleep()     
+            pi.write(self.mode[i], self.resolution[microstep][i])
 
 class Shade():
-    #jge - Object to stand in for a blind assembly 
-
-    def __init__(self, motor, name = ''):
+    #jge - container for shade elements
+    def __init__(self, motor, switch, name = ''):
         self.motor = motor
+        self.name = name
+        self.homeSwitch = switch
+        self.preset = []
+        print('Created ' + self.name)
+
+class HomeSwitch():
+    #jge - object to manage the limit switches used to find home
+    def __init__(self, switchPin, name = ''):
+        self.switchPin = switchPin
         self.name = name
         print('Created ' + self.name)
 
-    def move(self, displayMessage, direction):
-        self.motor.move(direction)
-        print(displayMessage)
+class Motor():
+    def __init__(self, sleepPin = 0, dirPin = 0, stepPin = 0, direction = 0, name = '', coverDirection = 0, uncoverDirection = 0):
+        self.sleepPin = sleepPin
+        self.dirPin = dirPin
+        self.stepPin = stepPin
+        self.direction = coverDirection
+        self.name = name
+        self.stepsToDest = 0
+        self.stepsFromHomeObject = None
+        self.stepsFromHomeCount = 0
+        self.coverDirection = coverDirection
+        self.uncoverDirection = uncoverDirection
+        #jge - set up callback function to keep track of steps
+        self.stepsFromHomeObject = pi.callback(self.stepPin, pigpio.RISING_EDGE, self.callbackFunc)
+        print('Created ' + self.name)
 
-    def stop(self, displayMessage):
-        self.motor.stop()
-        print(displayMessage)
+    def move(self, direction):        
+        #jge - make sure it's not running against the wide open stops
+        
+        if (direction == self.coverDirection or (direction != self.coverDirection and self.stepsFromHomeCount > 0)):
+            self.direction = direction
+            self.wakeUp()
+            pi.write(self.sleepPin, 1)
+            pi.write(self.dirPin, direction)
+            pi.write(self.stepPin, 1)
+            pi.set_PWM_dutycycle(self.stepPin, 128)  # PWM 1/2 On 1/2 Off
+            pi.set_PWM_frequency(self.stepPin, 500)
+            sleep(.05)
+        else:
+            print('Cant open ' + self.name + ' any further')
 
+        """
+        #jge - keeping this block around to easily comment the block above
+        #jge - when the shades are not in zero positions, but the program
+        #jge - thinks they are and won't allow them to be rolled up
+        self.direction = direction
+        self.wakeUp()
+        pi.write(self.sleepPin, 1)
+        pi.write(self.dirPin, direction)
+        pi.write(self.stepPin, 1)
+        pi.set_PWM_dutycycle(self.stepPin, 128)  # PWM 1/2 On 1/2 Off
+        pi.set_PWM_frequency(self.stepPin, 500)
+        sleep(.05)
+        """
+        
+    def callbackFunc(self, gpio, level, tick):     
+        #jge - figure out whether to add or subtract the steps
+        if (self.direction == self.coverDirection):
+            self.stepsFromHomeCount += 1
+        else:
+            self.stepsFromHomeCount -= 1
+
+        #jge - stop the move if it's wide open
+        if (self.stepsFromHomeCount == 0 and self.direction != self.coverDirection):
+            self.stop()
+            print('Stopping motor ' + self.name + 'because the shade is wide open')
+            
+    def stop(self):
+        #jge - stop motion then sleep
+        pi.write(self.stepPin, 0)
+        pi.write(self.sleepPin, 0)
+        self.sleep()
+        
+    def sleep(self):
+        #jge - this turns off motor voltage
+        pi.write(self.sleepPin, 0)
+        
+    def wakeUp(self):
+        #jge - this restores power to the motor
+        pi.write(self.sleepPin, 1)
+            
 #################################################################
 #jge - init
 
 pi = pigpio.pi() # Connect to pigpiod daemon
 if not pi.connected:
    exit(0)
+##########################################################
+#jge - Motor constructors 
+#jge - 1st argument = sleep Pin
+#jge - 2nd argument = dir Pin
+#jge - 3rd argument = step pin
+#jge - 4th argument = name
+#jge - 5th argument = Cover direction - so can compare when +- steps
+#jge - 6th argument = Uncover direction
+#jge - HomeSwitch constructors.  1st arg - gpio
+##########################################################
+leftHomeSwitch = HomeSwitch(1, 'left home switch')
+leftMotor = Motor(6, 26, 19, 0, 'motor 3', 0, 1)
+leftShade = Shade(leftMotor, leftHomeSwitch, 'left shade')
 
-#jge - setup generic hardware and software 
-environment = Environment(14, 15, 18) 
+rightHomeSwitch = HomeSwitch(1, 'right home switch')
+rightMotor = Motor(12, 24, 23, 0, 'motor 1', 0, 1)
+rightShade = Shade(rightMotor, rightHomeSwitch, 'right shade')
 
-leftMotor = Motor(6, 26, 19, 0, 'motor 3')
-leftShade = Shade(leftMotor, 'left shade')
+topHomeSwitch = HomeSwitch(1, 'top home switch')
+topMotor = Motor(5, 27, 17, 0, 'motor 2', 0, 1)
+topShade = Shade(topMotor, topHomeSwitch, 'top shade')
 
-rightMotor = Motor(12, 24, 23, 0, 'motor 1')
-rightShade = Shade(rightMotor, 'right shade')
+botHomeSwitch = HomeSwitch(1, 'bottom home switch')
+botMotor = Motor(13, 20, 21, 0, 'motor 4', 1, 0)
+botShade = Shade(botMotor, botHomeSwitch, 'bottom shade')
 
-topMotor = Motor(5, 27, 17, 0, 'motor 2')
-topShade = Shade(topMotor, 'top shade')
+#####################################
+#jge - hard coded preset building for now
+         
+leftShade.preset.append(5000)
+rightShade.preset.append(4100)
+topShade.preset.append(3200)
+botShade.preset.append(2500)
 
-botMotor = Motor(13, 20, 21, 0, 'motor 4')
-botShade = Shade(botMotor, 'bottom shade')
+leftShade.preset.append(8000)
+rightShade.preset.append(500)
+topShade.preset.append(100)
+botShade.preset.append(100)
 
-allShades = [leftShade, rightShade, topShade, botShade]
+leftShade.preset.append(5000)
+rightShade.preset.append(4000)
+topShade.preset.append(3000)
+botShade.preset.append(2000)
 
-#jge - end init
+leftShade.preset.append(7000)
+rightShade.preset.append(7000)
+topShade.preset.append(7000)
+botShade.preset.append(7000)           
+################################
+
+
+##########################################################
+#jge - Environment constructor - setup common properties
+#jge - 1st argument = Microstep Mode - Full, 1/2, 1/4, 1/8, 1/16, 1/32
+#jge - 2nd argument = Mode pin 1 - shared by all motor drivers
+#jge - 3rd argument = Mode pin 2 - shared by all motor drivers
+#jge - 4th argument = Mode pin 3 - shared by all motor drivers
+#jge - 5th argument = Maximum microsecond delay between preset going pulses
+#jge - 6th argument = Minimum ""
+#jge - 7th argument - How much to gain between the min and max in each loop  
 #################################################################
+environment = Environment('Full', 14, 15, 18, 1100, 400, 1) 
+unit = Unit([leftShade, rightShade, topShade, botShade], environment)
 
 #################################################################
 #jge - This would be main.  Infinite loop to check for user input
@@ -128,59 +489,83 @@ try:
         dirKey = sys.stdin.read(1)[0]
 
         if (dirKey == 'n') :
-            botShade.move('Bottom Cover', 1)
+            print('Bottom Cover')
+            botShade.motor.move(1)
         elif (dirKey == 'v'):
-            botShade.move('Bottom Uncover', 0)
+            print('Bottom Uncover')
+            botShade.motor.move(0)
         elif (dirKey ==  'b'):
-            botShade.stop('Bottom Stop')
+            print('Bottom Stop')
+            botShade.motor.stop()
+            
         elif (dirKey == 'd'):
-            leftShade.move('Left Cover', 0)
+            print('Left Cover')
+            leftShade.motor.move(0)
         elif (dirKey == 'a'):
-            leftShade.move('Left Uncover', 1)
+            print('Left Uncover')
+            leftShade.motor.move(1)
         elif (dirKey == 's'):
-            leftShade.stop('Left Stop')
+            print('Left stop')           
+            leftShade.motor.stop()
+            
         elif (dirKey == 'u') :
-            topShade.move('Top Cover', 0)
+            print('Top Cover')           
+            topShade.motor.move(0)
         elif (dirKey == 't'):
-            topShade.move('Top Uncover', 1)
+            print('Top Uncover')            
+            topShade.motor.move(1)
         elif (dirKey ==  'y'):
-            topShade.stop('Top Stop')
+            print('Top Stop') 
+            topShade.motor.stop()
+            
         elif (dirKey == 'j') :
-            rightShade.move('Right Cover', 0)
+            print('Right Cover')
+            rightShade.motor.move(0)
         elif (dirKey == 'l'):
-            rightShade.move('Right Uncover', 1)
+            print('Right Uncover')
+            rightShade.motor.move(1)
         elif (dirKey ==  'k'):
-            rightShade.stop('Right Stop')
+            print('Right Stop')
+            rightShade.motor.stop()
+            
         elif (dirKey == 'z'):
-            #print('Uncovering All')
-            leftShade.move('', 1)
-            rightShade.move('', 1)
-            topShade.move('', 1)
-            botShade.move('', 0)
+            print('Uncovering All')
+            unit.uncoverAll()
+
         elif (dirKey == 'x'):
-            #print('Covering All')
-            leftShade.move('', 0)
-            rightShade.move('', 0)
-            topShade.move('', 0)
-            botShade.move('', 1) 
+            print('Covering All')
+            unit.coverAll()
+            
         elif (dirKey == 'p'):
             print('All Stop')
-            for i, thisShade in enumerate(allShades):
-                thisShade.stop('Stopping ' + thisShade.name)
+            unit.stopAll()
+
+        elif (dirKey == '1'):
+            print('Goto preset 1')
+            unit.gotoPreset(1)
+
+        elif (dirKey == '2'):
+            print('Goto preset 2')
+            unit.gotoPreset(2)
+
+        elif (dirKey == '3'):
+            print('Goto preset 3')
+            unit.gotoPreset(3)
+
+        elif (dirKey == '4'):
+            print('Goto preset 4')
+            unit.gotoPreset(4)
+            
         elif (dirKey == 'q'):
             raise Exception('Quitting')
+    
         else:
             pass
 except Exception as e :
     print ('\nOh goooood for you')
     raise
 finally:
-    environment.restoreSettings()
-
-    for i, thisShade in enumerate(allShades):
-        thisShade.stop('Shutting down ' + thisShade.name)
-
-    pi.stop()
+    unit.cleanup()
 
 #jge - end main loop
 ############################################
