@@ -70,7 +70,7 @@ class Unit():
                 pi.write(unit.allShades[i].motor.dirPin, unit.allShades[i].motor.uncoverDirection)
                 unit.allShades[i].motor.stepsToDest = unit.allShades[i].motor.stepsFromHomeCount - theDestination 
             
-    def gotoPreset(self, presetNo):
+    def gotoPreset(self, presetNo, unit):
         ################################
         #jge - preset init 
         unit.wakeUpAll()
@@ -285,9 +285,9 @@ class Unit():
 class Environment():
     #jge - housekeeping?
 
-    def __init__(self, microstep, modePin1 = 0, modePin2 = 0, modePin3 = 0, maxDelay = 0, minDelay = 0, stepSize = 0):
-        self.getSettings()
-        self.commonPinSetup(microstep, modePin1 = 0, modePin2 = 0, modePin3 = 0)
+    def __init__(self, microstep, modePin1 = 0, modePin2 = 0, modePin3 = 0, maxDelay = 0, minDelay = 0, stepSize = 0, pi=0):
+        #jge - commenting for tk - self.getSettings()
+        self.commonPinSetup(pi, microstep, modePin1 = 0, modePin2 = 0, modePin3 = 0)
         #jge - maxDelay is the lowest frequency between pulses
         self.maxDelay = maxDelay
         #jge - minDelay is the quickest pace
@@ -295,18 +295,18 @@ class Environment():
         #jge - how much to gain between high and low frequencies
         self.stepSize = stepSize
 
-    def getSettings(self):
+    #jge - commenting for tk - def getSettings(self):
         #jge - this has to do with setting up keyboard input
         #jge - making this change is what goofs up the format
         #jge - when making print statements.         
-        self.orig_settings = termios.tcgetattr(sys.stdin)
-        tty.setraw(sys.stdin) 
+        #jge - commenting for tk - self.orig_settings = termios.tcgetattr(sys.stdin)
+        #jge - commenting for tk - tty.setraw(sys.stdin) 
 
-    def restoreSettings(self):
+    #jge - commenting for tk - def restoreSettings(self):
         #jge - this puts the terminal back as it was so line feeds work
-        termios.tcsetattr(sys.stdin, termios.TCSADRAIN, self.orig_settings)
+        #jge - commenting for tk - termios.tcsetattr(sys.stdin, termios.TCSADRAIN, self.orig_settings)
 
-    def commonPinSetup(self, microstep, modePin1 = 0, modePin2 = 0, modePin3 = 0):
+    def commonPinSetup(self, pi, microstep, modePin1 = 0, modePin2 = 0, modePin3 = 0):
         #jge - As wired now, these GPIO pins are shared by all motor drivers.
         #jge - Doesn't seem like there will be a need for motors to use different
         #jge - microstepping values.  Also, I don't think there are enough pins on 
@@ -341,7 +341,7 @@ class HomeSwitch():
         print('Created ' + self.name)
 
 class Motor():
-    def __init__(self, sleepPin = 0, dirPin = 0, stepPin = 0, direction = 0, name = '', coverDirection = 0, uncoverDirection = 0):
+    def __init__(self, sleepPin = 0, dirPin = 0, stepPin = 0, direction = 0, name = '', coverDirection = 0, uncoverDirection = 0, pi=0):
         self.sleepPin = sleepPin
         self.dirPin = dirPin
         self.stepPin = stepPin
@@ -358,7 +358,7 @@ class Motor():
 
     def move(self, direction):        
         #jge - make sure it's not running against the wide open stops
-        """
+        
         if (direction == self.coverDirection or (direction != self.coverDirection and self.stepsFromHomeCount > 0)):
             self.direction = direction
             self.wakeUp()
@@ -383,7 +383,7 @@ class Motor():
         pi.set_PWM_dutycycle(self.stepPin, 128)  # PWM 1/2 On 1/2 Off
         pi.set_PWM_frequency(self.stepPin, 500)
         sleep(.05)
-        
+        """
         
     def callbackFunc(self, gpio, level, tick):     
         #jge - figure out whether to add or subtract the steps
@@ -410,173 +410,5 @@ class Motor():
     def wakeUp(self):
         #jge - this restores power to the motor
         pi.write(self.sleepPin, 1)
-            
-#################################################################
-#jge - init
+        
 
-pi = pigpio.pi() # Connect to pigpiod daemon
-if not pi.connected:
-   exit(0)
-##########################################################
-#jge - Motor constructors 
-#jge - 1st argument = sleep Pin
-#jge - 2nd argument = dir Pin
-#jge - 3rd argument = step pin
-#jge - 4th argument = name
-#jge - 5th argument = Cover direction - so can compare when +- steps
-#jge - 6th argument = Uncover direction
-#jge - HomeSwitch constructors.  1st arg - gpio
-##########################################################
-leftHomeSwitch = HomeSwitch(1, 'left home switch')
-leftMotor = Motor(6, 26, 19, 0, 'motor 3', 0, 1)
-leftShade = Shade(leftMotor, leftHomeSwitch, 'left shade')
-
-rightHomeSwitch = HomeSwitch(1, 'right home switch')
-rightMotor = Motor(12, 24, 23, 0, 'motor 1', 0, 1)
-rightShade = Shade(rightMotor, rightHomeSwitch, 'right shade')
-
-topHomeSwitch = HomeSwitch(1, 'top home switch')
-topMotor = Motor(5, 27, 17, 0, 'motor 2', 0, 1)
-topShade = Shade(topMotor, topHomeSwitch, 'top shade')
-
-botHomeSwitch = HomeSwitch(1, 'bottom home switch')
-botMotor = Motor(13, 20, 21, 0, 'motor 4', 1, 0)
-botShade = Shade(botMotor, botHomeSwitch, 'bottom shade')
-
-#####################################
-#jge - hard coded preset building for now
-         
-leftShade.preset.append(3000)
-rightShade.preset.append(7000)
-topShade.preset.append(3200)
-botShade.preset.append(2500)
-
-leftShade.preset.append(8000)
-rightShade.preset.append(500)
-topShade.preset.append(100)
-botShade.preset.append(100)
-
-leftShade.preset.append(5000)
-rightShade.preset.append(4000)
-topShade.preset.append(3000)
-botShade.preset.append(2000)
-
-leftShade.preset.append(1000)
-rightShade.preset.append(2000)
-topShade.preset.append(3000)
-botShade.preset.append(4000)
-
-leftShade.preset.append(0)
-rightShade.preset.append(0)
-topShade.preset.append(0)
-botShade.preset.append(0)
-
-leftShade.preset.append(8900)
-rightShade.preset.append(8900)
-topShade.preset.append(10500)
-botShade.preset.append(10500)
-################################
-
-
-##########################################################
-#jge - Environment constructor - setup common properties
-#jge - 1st argument = Microstep Mode - Full, 1/2, 1/4, 1/8, 1/16, 1/32
-#jge - 2nd argument = Mode pin 1 - shared by all motor drivers
-#jge - 3rd argument = Mode pin 2 - shared by all motor drivers
-#jge - 4th argument = Mode pin 3 - shared by all motor drivers
-#jge - 5th argument = Maximum microsecond delay between preset going pulses
-#jge - 6th argument = Minimum ""
-#jge - 7th argument - How much to gain between the min and max in each loop  
-#################################################################
-environment = Environment('Full', 14, 15, 18, 1100, 400, 1) 
-unit = Unit([leftShade, rightShade, topShade, botShade], environment)
-
-#################################################################
-#jge - This would be main.  Infinite loop to check for user input
-
-try:
-    while True:
-        dirKey = sys.stdin.read(1)[0]
-
-        if (dirKey == 'n') :
-            print('Bottom Cover')
-            botShade.motor.move(1)
-        elif (dirKey == 'v'):
-            print('Bottom Uncover')
-            botShade.motor.move(0)
-        elif (dirKey ==  'b'):
-            print('Bottom Stop')
-            botShade.motor.stop()
-            
-        elif (dirKey == 'd'):
-            print('Left Cover')
-            leftShade.motor.move(0)
-        elif (dirKey == 'a'):
-            print('Left Uncover')
-            leftShade.motor.move(1)
-        elif (dirKey == 's'):
-            print('Left stop')           
-            leftShade.motor.stop()
-            
-        elif (dirKey == 'u') :
-            print('Top Cover')           
-            topShade.motor.move(0)
-        elif (dirKey == 't'):
-            print('Top Uncover')            
-            topShade.motor.move(1)
-        elif (dirKey ==  'y'):
-            print('Top Stop') 
-            topShade.motor.stop()
-            
-        elif (dirKey == 'j') :
-            print('Right Cover')
-            rightShade.motor.move(0)
-        elif (dirKey == 'l'):
-            print('Right Uncover')
-            rightShade.motor.move(1)
-        elif (dirKey ==  'k'):
-            print('Right Stop')
-            rightShade.motor.stop()
-            
-        elif (dirKey == 'z'):
-            print('Uncovering All')
-            #unit.uncoverAll()
-            unit.gotoPreset(5)
-            
-        elif (dirKey == 'x'):
-            print('Covering All')
-            unit.gotoPreset(6)
-            
-        elif (dirKey == 'p'):
-            print('All Stop')
-            unit.stopAll()
-
-        elif (dirKey == '1'):
-            print('Goto preset 1')
-            unit.gotoPreset(1)
-
-        elif (dirKey == '2'):
-            print('Goto preset 2')
-            unit.gotoPreset(2)
-
-        elif (dirKey == '3'):
-            print('Goto preset 3')
-            unit.gotoPreset(3)
-
-        elif (dirKey == '4'):
-            print('Goto preset 4')
-            unit.gotoPreset(4)
-            
-        elif (dirKey == 'q'):
-            raise Exception('Quitting')
-    
-        else:
-            pass
-except Exception as e :
-    print ('\nOh goooood for you')
-    raise
-finally:
-    unit.cleanup()
-
-#jge - end main loop
-############################################
