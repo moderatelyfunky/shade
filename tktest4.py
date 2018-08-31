@@ -26,7 +26,7 @@ roundButton = tk.PhotoImage(file="images/round-button.gif")
 smallRoundButton = tk.PhotoImage(file="images/small-round-button.gif")
 
 #btnDraw = tk.Button(app, text="This is where the drawing widget will go.\r\n ").grid(row=0,column=0, columnspan=4)
-btnCircle1 = tk.Button(app, image=roundButton, borderwidth=0, command=gUnit.coverAll(5)).grid(row=2, column=0, rowspan=2, columnspan=2)
+btnCircle1 = tk.Button(app, image=roundButton, borderwidth=0, command=gUnit.coverAll()).grid(row=2, column=0, rowspan=2, columnspan=2)
 btnCircle2 = tk.Button(app, image=roundButton, borderwidth=0, command=gUnit.uncoverAll()).grid(row=2, column=3, rowspan=2, columnspan=2)
 btnTopShadeUp = tk.Button(app, image=arrowUp, borderwidth=0, command=doSomething).grid(row=2, column=2)
 btnTopShadeDown = tk.Button(app, image=arrowDown, borderwidth=0, command=doSomething).grid(row=3, column=2)
