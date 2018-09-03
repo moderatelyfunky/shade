@@ -16,7 +16,7 @@ class Unit():
 
     def wakeUpAll(self):
         for i, thisShade in enumerate(self.allShades):
-            thisShade.motor.wakeUp()
+            self.allShades[i].motor.wakeUp()
 
     def sleepAll(self):
         for i, thisShade in enumerate(self.allShades):
