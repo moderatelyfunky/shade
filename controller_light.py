@@ -60,6 +60,41 @@ class Unit():
         #unit = Unit([self.leftShade, self.rightShade, self.topShade, self.botShade], environment)
         #jge - end Unit init
         #################################################################
+
+        #####################################
+        #jge - hard coded preset building for now
+                 
+        self.leftShade.preset.append(3000)
+        self.rightShade.preset.append(7000)
+        self.topShade.preset.append(3200)
+        self.botShade.preset.append(2500)
+
+        self.leftShade.preset.append(8000)
+        self.rightShade.preset.append(500)
+        self.topShade.preset.append(100)
+        self.botShade.preset.append(100)
+
+        self.leftShade.preset.append(5000)
+        self.rightShade.preset.append(4000)
+        self.topShade.preset.append(3000)
+        self.botShade.preset.append(2000)
+
+        self.leftShade.preset.append(1000)
+        self.rightShade.preset.append(2000)
+        self.topShade.preset.append(3000)
+        self.botShade.preset.append(4000)
+
+        self.leftShade.preset.append(0)
+        self.rightShade.preset.append(0)
+        self.topShade.preset.append(0)
+        self.botShade.preset.append(0)
+
+        self.leftShade.preset.append(8900)
+        self.rightShade.preset.append(8900)
+        self.topShade.preset.append(10500)
+        self.botShade.preset.append(10500)
+        ################################
+
         
     def wakeUpAll(self):
         for i, thisShade in enumerate(self.allShades):
@@ -97,39 +132,6 @@ class Unit():
         
     def getPresetPositions(self, presetNo):
         #jge - Use the preset number to retrieve the positions for each 
-        #####################################
-        #jge - hard coded preset building for now
-                 
-        self.leftShade.preset.append(3000)
-        self.rightShade.preset.append(7000)
-        self.topShade.preset.append(3200)
-        self.botShade.preset.append(2500)
-
-        self.leftShade.preset.append(8000)
-        self.rightShade.preset.append(500)
-        self.topShade.preset.append(100)
-        self.botShade.preset.append(100)
-
-        self.leftShade.preset.append(5000)
-        self.rightShade.preset.append(4000)
-        self.topShade.preset.append(3000)
-        self.botShade.preset.append(2000)
-
-        self.leftShade.preset.append(1000)
-        self.rightShade.preset.append(2000)
-        self.topShade.preset.append(3000)
-        self.botShade.preset.append(4000)
-
-        self.leftShade.preset.append(0)
-        self.rightShade.preset.append(0)
-        self.topShade.preset.append(0)
-        self.botShade.preset.append(0)
-
-        self.leftShade.preset.append(8900)
-        self.rightShade.preset.append(8900)
-        self.topShade.preset.append(10500)
-        self.botShade.preset.append(10500)
-        ################################
         for i, thisShade in enumerate(self.allShades):
             theDestination = self.allShades[i].preset[presetNo - 1]
 
@@ -145,7 +147,7 @@ class Unit():
                 self.pi.write(self.allShades[i].motor.dirPin, self.allShades[i].motor.uncoverDirection)
                 self.allShades[i].motor.stepsToDest = self.allShades[i].motor.stepsFromHomeCount - theDestination 
             
-    def gotoPreset(self, presetNo):
+    def gotoPreset(self, event, presetNo):
         ################################
         #jge - preset init 
         self.wakeUpAll()
@@ -437,9 +439,9 @@ class Motor():
         self.stepsFromHomeObject = parent.pi.callback(self.stepPin, pigpio.RISING_EDGE, self.callbackFunc)
         print('Created ' + self.name)
 
-    def move(self, direction):        
+    def move(self, event, direction):        
         #jge - make sure it's not running against the wide open stops
-        
+        print('Running motor ' + self.name)
         if (direction == self.coverDirection or (direction != self.coverDirection and self.stepsFromHomeCount > 0)):
             self.direction = direction
             self.wakeUp()
@@ -475,10 +477,10 @@ class Motor():
 
         #jge - stop the move if it's wide open
         if (self.stepsFromHomeCount == 0 and self.direction != self.coverDirection):
-            self.stop()
+            self.stop(self)
             print('Stopping motor ' + self.name + 'because the shade is wide open')
             
-    def stop(self):
+    def stop(self, event):
         #jge - stop motion then sleep
         self.parent.pi.write(self.stepPin, 0)
         self.parent.pi.write(self.sleepPin, 0)
