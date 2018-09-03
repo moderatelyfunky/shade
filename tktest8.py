@@ -1,8 +1,37 @@
 import tkinter as tk
+import time
+
+class ButtonTimer:
+    timerOn = False
+    timerCount = 0.0
+
+    def __init__(self, timerOn, timerCount):
+        self.timerOn = timerOn
+        self.timerCount = timerCount
+
 
 def doSomethingElse(event):
     print(event.widget)
 
+def testingTiming(event, t: ButtonTimer):
+    if str(event.widget) == ".!button12":
+        print("Small Button Pressed")
+        if t.timerOn == False:
+            t.timerOn = True
+            t.timerCount = time.time()
+
+
+def testingTiming2(event, t: ButtonTimer):
+    if str(event.widget) == ".!button12":
+        print("Small Button Released")
+        if t.timerOn == True:
+            t.timerOn = False
+            t.timerCount = time.time() - t.timerCount
+            print(str(t.timerCount))
+
+
+
+timer1 = ButtonTimer(False, 0.0)
 
 app = tk.Tk()
 app.geometry("800x480")
@@ -65,8 +94,10 @@ btnBottomShadeDown.bind('<ButtonRelease-1>', doSomethingElse)
 btnBottomShadeDown.bind('<ButtonPress-1>', doSomethingElse)
 btnSmallCircle1 = tk.Button(app, image=smallRoundButton, borderwidth=0)
 btnSmallCircle1.grid(row=1, column=6, ipadx=3, ipady=3)
-btnSmallCircle1.bind('<ButtonRelease-1>', doSomethingElse)
-btnSmallCircle1.bind('<ButtonPress-1>', doSomethingElse)
+#btnSmallCircle1.bind('<ButtonRelease-1>', doSomethingElse)
+#btnSmallCircle1.bind('<ButtonPress-1>', doSomethingElse)
+btnSmallCircle1.bind('<ButtonPress-1>', lambda event: testingTiming(event, timer1))
+btnSmallCircle1.bind('<ButtonRelease-1>', lambda event: testingTiming2(event, timer1))
 btnSmallCircle2 = tk.Button(app, image=smallRoundButton, borderwidth=0)
 btnSmallCircle2.grid(row=2, column=6, ipadx=3, ipady=3)
 btnSmallCircle2.bind('<ButtonRelease-1>', doSomethingElse)
