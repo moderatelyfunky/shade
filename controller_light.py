@@ -1,4 +1,5 @@
 import weakref
+import configparser
 from time import sleep
 import pigpio
 import time
@@ -12,6 +13,10 @@ class Unit():
     #jge - this is the main point of entry for control from the gui
 
     def __init__(self):
+        #jge - read the ini file
+        self.config = configparser.RawConfigParser()
+        self.config.read('shade.ini')
+        
         self.pi = pigpio.pi() # Connect to pigpiod daemon
         if not self.pi.connected:
            exit(0)
@@ -29,19 +34,23 @@ class Unit():
         self.leftHomeSwitch = HomeSwitch(self, 1, 'left home switch')
         self.leftMotor = Motor(self, 6, 26, 19, 0, 'motor 3', 0, 1)
         self.leftShade = Shade(self, self.leftMotor, self.leftHomeSwitch, 'left shade')
+        self.getPresets(self.leftShade)
 
         self.rightHomeSwitch = HomeSwitch(self, 1, 'right home switch')
         self.rightMotor = Motor(self, 12, 24, 23, 0, 'motor 1', 0, 1)
         self.rightShade = Shade(self, self.rightMotor, self.rightHomeSwitch, 'right shade')
-
+        self.getPresets(self.rightShade)
+        
         self.topHomeSwitch = HomeSwitch(self, 1, 'top home switch')
         self.topMotor = Motor(self, 5, 27, 17, 0, 'motor 2', 0, 1)
         self.topShade = Shade(self, self.topMotor, self.topHomeSwitch, 'top shade')
-
+        self.getPresets(self.topShade)
+        
         self.botHomeSwitch = HomeSwitch(self, 1, 'bottom home switch')
         self.botMotor = Motor(self, 13, 20, 21, 0, 'motor 4', 1, 0)
-        self.botShade = Shade(self, self.botMotor, self.botHomeSwitch, 'bottom shade')
-
+        self.botShade = Shade(self, self.botMotor, self.botHomeSwitch, 'bot shade')
+        self.getPresets(self.botShade)
+        
         ##########################################################
         #jge - Environment constructor - setup common properties
         #jge - 1st argument = Microstep Mode - Full, 1/2, 1/4, 1/8, 1/16, 1/32
@@ -57,52 +66,16 @@ class Unit():
         self.allShades = [self.leftShade, self.rightShade, self.topShade, self.botShade]
         print('Created allshades array')
         print('Done with init')
-        #unit = Unit([self.leftShade, self.rightShade, self.topShade, self.botShade], environment)
         #jge - end Unit init
         #################################################################
-
-        #####################################
-        #jge - hard coded preset building for now
-                 
-        self.leftShade.preset.append(3000)
-        self.rightShade.preset.append(7000)
-        self.topShade.preset.append(3200)
-        self.botShade.preset.append(2500)
-
-        self.leftShade.preset.append(8000)
-        self.rightShade.preset.append(500)
-        self.topShade.preset.append(100)
-        self.botShade.preset.append(100)
-
-        self.leftShade.preset.append(5000)
-        self.rightShade.preset.append(4000)
-        self.topShade.preset.append(3000)
-        self.botShade.preset.append(2000)
-
-        self.leftShade.preset.append(1000)
-        self.rightShade.preset.append(2000)
-        self.topShade.preset.append(3000)
-        self.botShade.preset.append(4000)
-
-        self.leftShade.preset.append(0)
-        self.rightShade.preset.append(0)
-        self.topShade.preset.append(0)
-        self.botShade.preset.append(0)
-
-        self.leftShade.preset.append(8900)
-        self.rightShade.preset.append(8900)
-        self.topShade.preset.append(10500)
-        self.botShade.preset.append(10500)
-        ################################
-
         
     def wakeUpAll(self):
         for i, thisShade in enumerate(self.allShades):
-            thisShade.motor.wakeUp()
+            self.allShades[i].motor.wakeUp()
 
     def sleepAll(self):
         for i, thisShade in enumerate(self.allShades):
-            thisShade.motor.sleep()
+            self.allShades[i].motor.sleep()
             
     def uncoverAll(self):
         print('Uncovering all')
@@ -129,7 +102,16 @@ class Unit():
 
     #def setPresetPositions(self):
         #jge - todo: some future method to save current step counts
-        
+
+    def getPresets(self, shade):
+        #jge - read the ini for presets       
+        shade.preset.append(int(self.config.get('presets', shade.name + ' 1')))
+        shade.preset.append(int(self.config.get('presets', shade.name + ' 2')))
+        shade.preset.append(int(self.config.get('presets', shade.name + ' 3')))
+        shade.preset.append(int(self.config.get('presets', shade.name + ' 4')))
+        shade.preset.append(int(self.config.get('presets', shade.name + ' open full')))
+        shade.preset.append(int(self.config.get('presets', shade.name + ' closed center')))        
+
     def getPresetPositions(self, presetNo):
         #jge - Use the preset number to retrieve the positions for each 
         for i, thisShade in enumerate(self.allShades):
@@ -441,7 +423,8 @@ class Motor():
 
     def move(self, event, direction):        
         #jge - make sure it's not running against the wide open stops
-        print('Running motor ' + self.name)
+
+        
         if (direction == self.coverDirection or (direction != self.coverDirection and self.stepsFromHomeCount > 0)):
             self.direction = direction
             self.wakeUp()
@@ -460,11 +443,11 @@ class Motor():
         #jge - thinks they are and won't allow them to be rolled up
         self.direction = direction
         self.wakeUp()
-        pi.write(self.sleepPin, 1)
-        pi.write(self.dirPin, direction)
-        pi.write(self.stepPin, 1)
-        pi.set_PWM_dutycycle(self.stepPin, 128)  # PWM 1/2 On 1/2 Off
-        pi.set_PWM_frequency(self.stepPin, 500)
+        self.parent.pi.write(self.sleepPin, 1)
+        self.parent.pi.write(self.dirPin, direction)
+        self.parent.pi.write(self.stepPin, 1)
+        self.parent.pi.set_PWM_dutycycle(self.stepPin, 128)  # PWM 1/2 On 1/2 Off
+        self.parent.pi.set_PWM_frequency(self.stepPin, 500)
         sleep(.05)
         """
         
@@ -493,93 +476,3 @@ class Motor():
     def wakeUp(self):
         #jge - this restores power to the motor
         self.parent.pi.write(self.sleepPin, 1)
-
-#################################################################
-#jge - This would be main.  Infinite loop to check for user input
-"""
-try:
-    while True:
-        dirKey = sys.stdin.read(1)[0]
-
-        if (dirKey == 'n') :
-            print('Bottom Cover')
-            botShade.motor.move(1)
-        elif (dirKey == 'v'):
-            print('Bottom Uncover')
-            botShade.motor.move(0)
-        elif (dirKey ==  'b'):
-            print('Bottom Stop')
-            botShade.motor.stop()
-            
-        elif (dirKey == 'd'):
-            print('Left Cover')
-            leftShade.motor.move(0)
-        elif (dirKey == 'a'):
-            print('Left Uncover')
-            leftShade.motor.move(1)
-        elif (dirKey == 's'):
-            print('Left stop')           
-            leftShade.motor.stop()
-            
-        elif (dirKey == 'u') :
-            print('Top Cover')           
-            topShade.motor.move(0)
-        elif (dirKey == 't'):
-            print('Top Uncover')            
-            topShade.motor.move(1)
-        elif (dirKey ==  'y'):
-            print('Top Stop') 
-            topShade.motor.stop()
-            
-        elif (dirKey == 'j') :
-            print('Right Cover')
-            rightShade.motor.move(0)
-        elif (dirKey == 'l'):
-            print('Right Uncover')
-            rightShade.motor.move(1)
-        elif (dirKey ==  'k'):
-            print('Right Stop')
-            rightShade.motor.stop()
-            
-        elif (dirKey == 'z'):
-            print('Uncovering All')
-            #unit.uncoverAll()
-            unit.gotoPreset(5)
-            
-        elif (dirKey == 'x'):
-            print('Covering All')
-            unit.gotoPreset(6)
-            
-        elif (dirKey == 'p'):
-            print('All Stop')
-            unit.stopAll()
-
-        elif (dirKey == '1'):
-            print('Goto preset 1')
-            unit.gotoPreset(1)
-
-        elif (dirKey == '2'):
-            print('Goto preset 2')
-            unit.gotoPreset(2)
-
-        elif (dirKey == '3'):
-            print('Goto preset 3')
-            unit.gotoPreset(3)
-
-        elif (dirKey == '4'):
-            print('Goto preset 4')
-            unit.gotoPreset(4)
-            
-        elif (dirKey == 'q'):
-            raise Exception('Quitting')
-    
-        else:
-            pass
-except Exception as e :
-    print ('\nOh goooood for you')
-    raise
-finally:
-    unit.cleanup()
-"""
-#jge - end main loop
-############################################
