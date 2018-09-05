@@ -16,8 +16,9 @@ def doSomethingElse(event):
 
 
 def timingStart(event, t: ButtonTimer):
-    if str(event.widget) == ".btnSmallCircle1":
+    if str(event.widget) == ".btnSmallCircle4":
         print("Small Button Pressed")
+        btnSmallCircle4.configure(image=smallButtonGlow)
         if t.timerOn == False:
             # if the timer is off, start it and get the current time
             t.timerOn = True
@@ -25,8 +26,9 @@ def timingStart(event, t: ButtonTimer):
 
 
 def timingStop(event, t: ButtonTimer):
-    if str(event.widget) == ".btnSmallCircle1":
+    if str(event.widget) == ".btnSmallCircle4":
         print("Small Button Released")
+        btnSmallCircle4.configure(image=smallRoundButton)
         if t.timerOn == True:
             # if the timer is on, stop it and get the count
             t.timerOn = False
@@ -92,6 +94,7 @@ arrowUp=tk.PhotoImage(file="images/arrow-up.gif")
 arrowDown=tk.PhotoImage(file="images/arrow-down.gif")
 roundButton = tk.PhotoImage(file="images/round-button.gif")
 smallRoundButton = tk.PhotoImage(file="images/small-round-button.gif")
+smallButtonGlow = tk.PhotoImage(file="images/smallButtonGlow.gif")
 
 canvasDraw = tk.Canvas(app, width=195, height=419, borderwidth=1)
 canvasDraw.grid(row=1, column=1, rowspan=5, ipadx=3, ipady=3)
@@ -99,11 +102,11 @@ canvasDraw.bind('<ButtonPress-1>', lambda event: getStartCoords(event, r1))
 canvasDraw.bind('<ButtonRelease-1>', lambda event: getEndCoords(event, r1))
 
 btnCircle1 = tk.Button(app, name="btnCircle1", image=roundButton, borderwidth=0)
-btnCircle1.grid(row=1, column=3, rowspan=2, columnspan=2, ipadx=3, ipady=3)
+btnCircle1.grid(row=4, column=3, rowspan=2, columnspan=2, ipadx=3, ipady=3)
 btnCircle1.bind('<ButtonRelease-1>', doSomethingElse)
 btnCircle1.bind('<ButtonPress-1>', doSomethingElse)
 btnCircle2 = tk.Button(app, name="btnCircle2", image=roundButton, borderwidth=0)
-btnCircle2.grid(row=4, column=3, rowspan=2, columnspan=2, ipadx=3, ipady=3)
+btnCircle2.grid(row=1, column=3, rowspan=2, columnspan=2, ipadx=3, ipady=3)
 btnCircle2.bind('<ButtonRelease-1>', doSomethingElse)
 btnCircle2.bind('<ButtonPress-1>', doSomethingElse)
 btnTopShadeUp = tk.Button(app, name="btnTopShadeUp", image=arrowLeft, borderwidth=0)
@@ -114,22 +117,22 @@ btnTopShadeDown = tk.Button(app, name="btnTopShadeDown", image=arrowRight, borde
 btnTopShadeDown.grid(row=3, column=4, ipadx=3, ipady=3)
 btnTopShadeDown.bind('<ButtonRelease-1>', doSomethingElse)
 btnTopShadeDown.bind('<ButtonPress-1>', doSomethingElse)
-btnLeftShadeLeft = tk.Button(app, name="btnLeftShadeLeft", image=arrowUp, borderwidth=0)
-btnLeftShadeLeft.grid(row=1, column=5, ipadx=3, ipady=3)
-btnLeftShadeLeft.bind('<ButtonRelease-1>', doSomethingElse)
-btnLeftShadeLeft.bind('<ButtonPress-1>', doSomethingElse)
-btnLeftShadeRight = tk.Button(app, name="btnLeftShadeRight", image=arrowDown, borderwidth=0)
-btnLeftShadeRight.grid(row=2, column=5, ipadx=3, ipady=3)
-btnLeftShadeRight.bind('<ButtonRelease-1>', doSomethingElse)
-btnLeftShadeRight.bind('<ButtonPress-1>', doSomethingElse)
-btnRightShadeLeft = tk.Button(app, name="btnRightShadLeft", image=arrowUp, borderwidth=0)
-btnRightShadeLeft.grid(row=4, column=5, ipadx=3, ipady=3)
-btnRightShadeLeft.bind('<ButtonRelease-1>', doSomethingElse)
-btnRightShadeLeft.bind('<ButtonPress-1>', doSomethingElse)
-btnRightShadeRight = tk.Button(app, name="btnRightShadeRight", image=arrowDown, borderwidth=0)
-btnRightShadeRight.grid(row=5, column=5, ipadx=3, ipady=3)
+btnRightShadeRight = tk.Button(app, name="btnRightShadeRight", image=arrowUp, borderwidth=0)
+btnRightShadeRight.grid(row=1, column=5, ipadx=3, ipady=3)
 btnRightShadeRight.bind('<ButtonRelease-1>', doSomethingElse)
 btnRightShadeRight.bind('<ButtonPress-1>', doSomethingElse)
+btnRightShadeLeft = tk.Button(app, name="btnRightShadeLeft", image=arrowDown, borderwidth=0)
+btnRightShadeLeft.grid(row=2, column=5, ipadx=3, ipady=3)
+btnRightShadeLeft.bind('<ButtonRelease-1>', doSomethingElse)
+btnRightShadeLeft.bind('<ButtonPress-1>', doSomethingElse)
+btnLeftShadeRight = tk.Button(app, name="btnLeftShadeRight", image=arrowUp, borderwidth=0)
+btnLeftShadeRight.grid(row=4, column=5, ipadx=3, ipady=3)
+btnLeftShadeRight.bind('<ButtonRelease-1>', doSomethingElse)
+btnLeftShadeRight.bind('<ButtonPress-1>', doSomethingElse)
+btnLeftShadeLeft = tk.Button(app, name="btnLeftShadeLeft", image=arrowDown, borderwidth=0)
+btnLeftShadeLeft.grid(row=5, column=5, ipadx=3, ipady=3)
+btnLeftShadeLeft.bind('<ButtonRelease-1>', doSomethingElse)
+btnLeftShadeLeft.bind('<ButtonPress-1>', doSomethingElse)
 btnBottomShadeUp = tk.Button(app, name="btnBottomShadeUp", image=arrowLeft, borderwidth=0)
 btnBottomShadeUp.grid(row=3, column=6, ipadx=3, ipady=3)
 btnBottomShadeUp.bind('<ButtonRelease-1>', doSomethingElse)
@@ -138,22 +141,22 @@ btnBottomShadeDown = tk.Button(app, name="btnBottomShadeDown", image=arrowRight,
 btnBottomShadeDown.grid(row=3, column=7, ipadx=3, ipady=3)
 btnBottomShadeDown.bind('<ButtonRelease-1>', doSomethingElse)
 btnBottomShadeDown.bind('<ButtonPress-1>', doSomethingElse)
-btnSmallCircle1 = tk.Button(app, name="btnSmallCircle1", image=smallRoundButton, borderwidth=0)
-btnSmallCircle1.grid(row=1, column=6, ipadx=3, ipady=3)
-btnSmallCircle1.bind('<ButtonPress-1>', lambda event: timingStart(event, timer1))
-btnSmallCircle1.bind('<ButtonRelease-1>', lambda event: timingStop(event, timer1))
-btnSmallCircle2 = tk.Button(app, name="btnSmallCircle2", image=smallRoundButton, borderwidth=0)
-btnSmallCircle2.grid(row=2, column=6, ipadx=3, ipady=3)
-btnSmallCircle2.bind('<ButtonRelease-1>', doSomethingElse)
-btnSmallCircle2.bind('<ButtonPress-1>', doSomethingElse)
+btnSmallCircle4 = tk.Button(app, name="btnSmallCircle4", image=smallRoundButton, borderwidth=0)
+btnSmallCircle4.grid(row=1, column=6, ipadx=3, ipady=3)
+btnSmallCircle4.bind('<ButtonPress-1>', lambda event: timingStart(event, timer1))
+btnSmallCircle4.bind('<ButtonRelease-1>', lambda event: timingStop(event, timer1))
 btnSmallCircle3 = tk.Button(app, name="btnSmallCircle3", image=smallRoundButton, borderwidth=0)
-btnSmallCircle3.grid(row=4, column=6, ipadx=3, ipady=3)
+btnSmallCircle3.grid(row=2, column=6, ipadx=3, ipady=3)
 btnSmallCircle3.bind('<ButtonRelease-1>', doSomethingElse)
 btnSmallCircle3.bind('<ButtonPress-1>', doSomethingElse)
-btnSmallCircle4 = tk.Button(app, name="btnSmallCircle4", image=smallRoundButton, borderwidth=0)
-btnSmallCircle4.grid(row=5, column=6, ipadx=3, ipady=3)
-btnSmallCircle4.bind('<ButtonRelease-1>', doSomethingElse)
-btnSmallCircle4.bind('<ButtonPress-1>', doSomethingElse)
+btnSmallCircle2 = tk.Button(app, name="btnSmallCircle2", image=smallRoundButton, borderwidth=0)
+btnSmallCircle2.grid(row=4, column=6, ipadx=3, ipady=3)
+btnSmallCircle2.bind('<ButtonRelease-1>', doSomethingElse)
+btnSmallCircle2.bind('<ButtonPress-1>', doSomethingElse)
+btnSmallCircle1 = tk.Button(app, name="btnSmallCircle1", image=smallRoundButton, borderwidth=0)
+btnSmallCircle1.grid(row=5, column=6, ipadx=3, ipady=3)
+btnSmallCircle1.bind('<ButtonRelease-1>', doSomethingElse)
+btnSmallCircle1.bind('<ButtonPress-1>', doSomethingElse)
 
 app.grid_rowconfigure(0, weight=1)
 app.grid_rowconfigure(6, weight=1)
