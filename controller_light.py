@@ -14,8 +14,10 @@ class Unit():
 
     def __init__(self):
         #jge - read the ini file
+        self.iniFileName = 'shade.ini'
         self.config = configparser.RawConfigParser()
-        self.config.read('shade.ini')
+        self.config.optionxform = str
+        self.config.read(self.iniFileName)
         
         self.pi = pigpio.pi() # Connect to pigpiod daemon
         if not self.pi.connected:
@@ -100,8 +102,13 @@ class Unit():
 
         self.pi.stop()
 
-    #def setPresetPositions(self):
-        #jge - todo: some future method to save current step counts
+    def writePreset(self, event, presetNo):
+        #jge - write out the current position of each motor
+        for i, thisShade in enumerate(self.allShades):
+            self.config.set('presets', self.allShades[i].name + ' ' + str(presetNo), str(self.allShades[i].motor.stepsFromHomeCount))
+
+        with open(self.iniFileName, "w") as config_file:
+            self.config.write(config_file)
 
     def getPresets(self, shade):
         #jge - read the ini for presets       
