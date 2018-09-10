@@ -430,7 +430,6 @@ class Motor():
 
     def move(self, event, direction):        
         #jge - make sure it's not running against the wide open stops
-
         
         if (direction == self.coverDirection or (direction != self.coverDirection and self.stepsFromHomeCount > 0)):
             self.direction = direction
