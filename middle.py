@@ -3,7 +3,7 @@
 #jge - and the program run without being on the pi
 gotPi = 0
 
-import controller_light as con
+import controller as con
 gUnit = con.Unit()
 
 def gotoPreset(event, presetNo):
