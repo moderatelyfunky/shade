@@ -3,11 +3,17 @@ import configparser
 from time import sleep
 import pigpio
 import time
-import tty
 import sys
-import termios
-import RPi.GPIO as GPIO #jge - using for step count movement
 import operator #jge - used to find max array value and member
+import gotPi #jge - figure out which libraries to load
+
+if (gotPi.PiRunning == 1):
+    try:
+        import termios
+        import RPi.GPIO as GPIO #jge - using for step count movement
+        import tty
+    except (ImportError, RuntimeError):
+        print('Pi not present.  Renley is not right')
 
 class Unit():
     #jge - this is the main point of entry for control from the gui
