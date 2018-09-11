@@ -1,26 +1,42 @@
-#jge - this class will act as a layer between the UI
-#jge - and the controller, so dev work can be done
-#jge - and the program run without being on the pi
-import gotPi as gp #jge - figure out which libraries to load
-thisGotPi = gp.PiRunning()
-thisGP = thisGotPi.gotPi
+#jge - this class is a layer between the UI and the 
+#jge - controller, so the program run without being 
+#jge - on the pi.  If the INI has a 0 for the gotPi
+#jge - the controller isn't built.
+
+import configparser
 
 class Middle():
     def __init__(self): 
-        if (thisGP == '1'):
+        self.piHere = self.isRunningOnPi()
+        #jge - only instantiate the controller when needed
+        if (self.piHere == '1'):
             import controller as con
             self.gUnit = con.Unit()
 
+    def isRunningOnPi(self):
+        #jge - read the ini to get the gotPi value.
+        self.iniFileName = 'shade.ini'
+        self.config = configparser.RawConfigParser()
+        self.config.optionxform = str
+        self.config.read(self.iniFileName)
+        self.gotPi = self.config.get('config', 'gotPi')
+        if (self.gotPi == 1):
+            print('Pi is being present')
+            return self.gotPi
+        else:
+            print('No Pi is here.')
+            return self.gotPi
+
     def gotoPreset(self, event, presetNo):
-        if (thisGP == '1'):
+        if (self.piHere == '1'):
             self.gUnit.gotoPreset(event, presetNo)
 
     def writePreset(self, event, presetNo):
-        if (thisGP == '1'):
+        if (self.piHere == '1'):
             self.gUnit.writePreset(event, presetNo)
 
     def stop(self, event, shade):
-        if (thisGP == '1'):
+        if (self.piHere == '1'):
             if (shade == 'left'):
                 self.gUnit.leftShade.motor.stop(event)
             elif (shade == 'right'):
@@ -31,7 +47,7 @@ class Middle():
                 self.gUnit.botShade.motor.stop(event)
 
     def move(self, event, shade, direction):
-        if (thisGP == '1'):
+        if (self.piHere == '1'):
             if (shade == 'left'):
                 self.gUnit.leftShade.motor.move(event, direction)
             elif (shade == 'right'):

@@ -5,18 +5,22 @@ import pigpio
 import time
 import sys
 import operator #jge - used to find max array value and member
-import gotPi as gp #jge - figure out which libraries to load
-thisGotPi = gp.PiRunning()
-thisGP = thisGotPi.gotPi
+import termios
+import RPi.GPIO as GPIO #jge - using for step count movement
+import tty
 
-if (thisGP == 1):
-    try:
-        print('in controller.pi - loading pins') 
-        import termios
-        import RPi.GPIO as GPIO #jge - using for step count movement
-        import tty
-    except (ImportError, RuntimeError):
-        print('Pi not present.  Renley is not right')
+#import gotPi as gp #jge - figure out which libraries to load
+#thisGotPi = gp.PiRunning()
+#thisGP = thisGotPi.gotPi
+
+#if (thisGP == '1'):
+#    try:
+#        print('in controller.pi - loading pins') 
+#        import termios
+#        import RPi.GPIO as GPIO #jge - using for step count movement
+#        import tty
+#    except (ImportError, RuntimeError):
+#        print('Pi not present.  Renley is not right')
 
 class Unit():
     #jge - this is the main point of entry for control from the gui
