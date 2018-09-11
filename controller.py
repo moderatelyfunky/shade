@@ -5,10 +5,13 @@ import pigpio
 import time
 import sys
 import operator #jge - used to find max array value and member
-import gotPi #jge - figure out which libraries to load
+import gotPi as gp #jge - figure out which libraries to load
+thisGotPi = gp.PiRunning()
+thisGP = thisGotPi.gotPi
 
-if (gotPi.PiRunning == 1):
+if (thisGP == 1):
     try:
+        print('in controller.pi - loading pins') 
         import termios
         import RPi.GPIO as GPIO #jge - using for step count movement
         import tty

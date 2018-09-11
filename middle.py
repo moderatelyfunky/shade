@@ -1,24 +1,26 @@
 #jge - this class will act as a layer between the UI
 #jge - and the controller, so dev work can be done
 #jge - and the program run without being on the pi
-import gotPi
+import gotPi as gp #jge - figure out which libraries to load
+thisGotPi = gp.PiRunning()
+thisGP = thisGotPi.gotPi
 
 class Middle():
     def __init__(self): 
-        if (gotPi.PiRunning == 1):
+        if (thisGP == '1'):
             import controller as con
             self.gUnit = con.Unit()
 
     def gotoPreset(self, event, presetNo):
-        if (gotPi == 1):
+        if (thisGP == '1'):
             self.gUnit.gotoPreset(event, presetNo)
 
     def writePreset(self, event, presetNo):
-        if (gotPi == 1):
+        if (thisGP == '1'):
             self.gUnit.writePreset(event, presetNo)
 
     def stop(self, event, shade):
-        if (gotPi == 1):
+        if (thisGP == '1'):
             if (shade == 'left'):
                 self.gUnit.leftShade.motor.stop(event)
             elif (shade == 'right'):
@@ -29,7 +31,7 @@ class Middle():
                 self.gUnit.botShade.motor.stop(event)
 
     def move(self, event, shade, direction):
-        if (gotPi == 1):
+        if (thisGP == '1'):
             if (shade == 'left'):
                 self.gUnit.leftShade.motor.move(event, direction)
             elif (shade == 'right'):

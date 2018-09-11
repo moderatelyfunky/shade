@@ -8,3 +8,7 @@ class PiRunning():
         self.config.optionxform = str
         self.config.read(self.iniFileName)
         self.gotPi = self.config.get('config', 'gotPi')
+        if (self.gotPi == 1):
+            print('in GotPi.  Pi is being present')
+        else:
+            print('in GotPi.  No Pi is here.')
