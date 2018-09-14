@@ -1,9 +1,6 @@
 import tkinter as tk
 import time
-#jge - build middle layer to load controller or not
-#jge - depending on the gotPi value in the ini. 
 import middle
-mid = middle.Middle()
 
 class Rect():
     # (start_x, start_y) --> upper left corner
@@ -109,7 +106,6 @@ class PresetButton(tk.Button):
 
             #jge - save the preset if they held it down
             if (self.btnTimer.timerCount > 2):
-                self.touchScreen.app.after(500, self.drawNormalPreset(event))
                 mid.writePreset(event, self.presetNo)
                 #jge - flash to indicate successful save, but failing miserably at making it happen
             else:
@@ -203,7 +199,7 @@ class BigButton(tk.Button):
 class BigButtonContainer:
     def __init__(self, touchScreen):
         self.touchScreen = touchScreen
-        
+
         self.btnOpenWide = BigButton(5, self.touchScreen)
         self.btnOpenWide.grid(row=1, column=3)
 
@@ -248,6 +244,9 @@ class TouchScreen():
         self.presetButtons = PresetButtonContainer(self)
         self.freehandInput = FreeHandContainer(self)
         
+#jge - build middle layer to load controller or not
+#jge - depending on the gotPi value in the ini. 
+mid = middle.Middle()
 #jge - create the main container and start the tk.mainloop()
 touchScreen = TouchScreen()
 touchScreen.gui.app.mainloop()

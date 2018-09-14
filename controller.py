@@ -119,7 +119,8 @@ class Unit():
         #jge - write out the current position of each motor
         for i, thisShade in enumerate(self.allShades):
             self.config.set('presets', self.allShades[i].name + ' ' + str(presetNo), str(self.allShades[i].motor.stepsFromHomeCount))
-
+            #jge - update the current preset that's in memory
+            self.allShades[i].preset[presetNo -1] = self.allShades[i].motor.stepsFromHomeCount;
         with open(self.iniFileName, "w") as config_file:
             self.config.write(config_file)
 
