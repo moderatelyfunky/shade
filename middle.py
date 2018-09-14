@@ -20,7 +20,7 @@ class Middle():
         self.config.optionxform = str
         self.config.read(self.iniFileName)
         self.gotPi = self.config.get('config', 'gotPi')
-        if (self.gotPi == 1):
+        if (self.gotPi == '1'):
             print('Running Pifull')
             return self.gotPi
         else:
