@@ -9,19 +9,6 @@ import termios
 import RPi.GPIO as GPIO #jge - using for step count movement
 import tty
 
-#import gotPi as gp #jge - figure out which libraries to load
-#thisGotPi = gp.PiRunning()
-#thisGP = thisGotPi.gotPi
-
-#if (thisGP == '1'):
-#    try:
-#        print('in controller.pi - loading pins') 
-#        import termios
-#        import RPi.GPIO as GPIO #jge - using for step count movement
-#        import tty
-#    except (ImportError, RuntimeError):
-#        print('Pi not present.  Renley is not right')
-
 class Unit():
     #jge - this is the main point of entry for control from the gui
 
@@ -31,6 +18,10 @@ class Unit():
         self.config = configparser.RawConfigParser()
         self.config.optionxform = str
         self.config.read(self.iniFileName)
+
+        #jge - until the homing is working, allow the manual
+        #jge - buttons to move what they think is zero
+        self.stopAtWideOpen = self.config.get('config', 'stopAtWideOpen')
         
         self.pi = pigpio.pi() # Connect to pigpiod daemon
         if not self.pi.connected:
@@ -46,22 +37,22 @@ class Unit():
         #jge - 6th argument = Uncover direction
         #jge - HomeSwitch constructors.  1st arg - gpio
         ##########################################################
-        self.leftHomeSwitch = HomeSwitch(self, 1, 'left home switch')
+        self.leftHomeSwitch = HomeSwitch(self, 16, 'left home switch')
         self.leftMotor = Motor(self, 6, 26, 19, 0, 'motor 3', 0, 1)
         self.leftShade = Shade(self, self.leftMotor, self.leftHomeSwitch, 'left shade')
         self.getPresets(self.leftShade)
 
-        self.rightHomeSwitch = HomeSwitch(self, 1, 'right home switch')
+        self.rightHomeSwitch = HomeSwitch(self, 22, 'right home switch')
         self.rightMotor = Motor(self, 12, 24, 23, 0, 'motor 1', 0, 1)
         self.rightShade = Shade(self, self.rightMotor, self.rightHomeSwitch, 'right shade')
         self.getPresets(self.rightShade)
         
-        self.topHomeSwitch = HomeSwitch(self, 1, 'top home switch')
+        self.topHomeSwitch = HomeSwitch(self, 4, 'top home switch')
         self.topMotor = Motor(self, 5, 27, 17, 0, 'motor 2', 0, 1)
         self.topShade = Shade(self, self.topMotor, self.topHomeSwitch, 'top shade')
         self.getPresets(self.topShade)
         
-        self.botHomeSwitch = HomeSwitch(self, 1, 'bottom home switch')
+        self.botHomeSwitch = HomeSwitch(self, 25, 'bottom home switch')
         self.botMotor = Motor(self, 13, 20, 21, 0, 'motor 4', 1, 0)
         self.botShade = Shade(self, self.botMotor, self.botHomeSwitch, 'bot shade')
         self.getPresets(self.botShade)
@@ -81,6 +72,7 @@ class Unit():
         self.allShades = [self.leftShade, self.rightShade, self.topShade, self.botShade]
         print('Created allshades array')
         print('Done with init')
+           
         #jge - end Unit init
         #################################################################
         
@@ -419,10 +411,27 @@ class Shade():
 class HomeSwitch():
     #jge - object to manage the limit switches used to find home
     def __init__(self, parent, switchPin, name = ''):
-        self.parent = weakref.ref(parent) 
+        self.parent = parent
         self.switchPin = switchPin
         self.name = name
+        self.state = 'open'
+        parent.pi.set_mode(switchPin, pigpio.INPUT)
+        self.state = parent.pi.callback(self.switchPin, pigpio.EITHER_EDGE, self.callbackFunc)
+
         print('Created ' + self.name)
+
+    def callbackFunc(self, gpio, level, tick):     
+        #jge - listen for the switch
+        prevState = self.state
+        self.state = self.parent.pi.read(self.switchPin)
+           
+        if (prevState != self.state):
+            print(self.name + ' changed - ' + str(self.state))
+            if (str(self.state) == '1')
+                #jge - stop the motor
+        
+    #def findHome():
+        #if (self.state == 'open')
 
 class Motor():
     def __init__(self, parent, sleepPin = 0, dirPin = 0, stepPin = 0, direction = 0, name = '', coverDirection = 0, uncoverDirection = 0):
@@ -444,8 +453,10 @@ class Motor():
 
     def move(self, event, direction):        
         #jge - make sure it's not running against the wide open stops
-        
-        if (direction == self.coverDirection or (direction != self.coverDirection and self.stepsFromHomeCount > 0)):
+        if (direction == self.coverDirection or
+            (direction != self.coverDirection and self.stepsFromHomeCount > 0) or
+            self.parent.stopAtWideOpen == '0'
+            ):
             self.direction = direction
             self.wakeUp()
             self.parent.pi.write(self.sleepPin, 1)
@@ -456,20 +467,6 @@ class Motor():
             sleep(.05)
         else:
             print('Cant open ' + self.name + ' any further')
-
-        """
-        #jge - keeping this block around to easily comment the block above
-        #jge - when the shades are not in zero positions, but the program
-        #jge - thinks they are and won't allow them to be rolled up
-        self.direction = direction
-        self.wakeUp()
-        self.parent.pi.write(self.sleepPin, 1)
-        self.parent.pi.write(self.dirPin, direction)
-        self.parent.pi.write(self.stepPin, 1)
-        self.parent.pi.set_PWM_dutycycle(self.stepPin, 128)  # PWM 1/2 On 1/2 Off
-        self.parent.pi.set_PWM_frequency(self.stepPin, 500)
-        sleep(.05)
-        """
         
     def callbackFunc(self, gpio, level, tick):     
         #jge - figure out whether to add or subtract the steps
