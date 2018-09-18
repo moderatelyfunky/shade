@@ -38,23 +38,23 @@ class Unit():
         #jge - HomeSwitch constructors.  1st arg - gpio
         ##########################################################
         self.leftHomeSwitch = HomeSwitch(self, 16, 'left home switch')
-        self.leftMotor = Motor(self, 6, 26, 19, 0, 'motor 3', 0, 1)
-        self.leftShade = Shade(self, self.leftMotor, self.leftHomeSwitch, 'left shade')
+        self.leftMotor = Motor(self, 6, 26, 19, 0, 'motor 3', 0, 1, self.leftHomeSwitch)
+        self.leftShade = Shade(self, self.leftMotor,'left shade')
         self.getPresets(self.leftShade)
 
         self.rightHomeSwitch = HomeSwitch(self, 22, 'right home switch')
-        self.rightMotor = Motor(self, 12, 24, 23, 0, 'motor 1', 0, 1)
-        self.rightShade = Shade(self, self.rightMotor, self.rightHomeSwitch, 'right shade')
+        self.rightMotor = Motor(self, 12, 24, 23, 0, 'motor 1', 0, 1, self.rightHomeSwitch)
+        self.rightShade = Shade(self, self.rightMotor, 'right shade')
         self.getPresets(self.rightShade)
         
         self.topHomeSwitch = HomeSwitch(self, 4, 'top home switch')
-        self.topMotor = Motor(self, 5, 27, 17, 0, 'motor 2', 0, 1)
-        self.topShade = Shade(self, self.topMotor, self.topHomeSwitch, 'top shade')
+        self.topMotor = Motor(self, 5, 27, 17, 0, 'motor 2', 0, 1, self.topHomeSwitch)
+        self.topShade = Shade(self, self.topMotor, 'top shade')
         self.getPresets(self.topShade)
         
         self.botHomeSwitch = HomeSwitch(self, 25, 'bottom home switch')
-        self.botMotor = Motor(self, 13, 20, 21, 0, 'motor 4', 1, 0)
-        self.botShade = Shade(self, self.botMotor, self.botHomeSwitch, 'bot shade')
+        self.botMotor = Motor(self, 13, 20, 21, 0, 'motor 4', 1, 0, self.botHomeSwitch)
+        self.botShade = Shade(self, self.botMotor, 'bot shade')
         self.getPresets(self.botShade)
         
         ##########################################################
@@ -83,7 +83,7 @@ class Unit():
     def sleepAll(self):
         for i, thisShade in enumerate(self.allShades):
             self.allShades[i].motor.sleep()
-            
+                
     def uncoverAll(self):
         print('Uncovering all')
         self.gotoPreset(5)
@@ -400,14 +400,13 @@ class Environment():
 
 class Shade():
     #jge - container for shade elements
-    def __init__(self, parent, motor, switch, name = ''):
-        self.parent = weakref.ref(parent) 
+    def __init__(self, parent, motor, name = ''):
+        self.parent = parent 
         self.motor = motor
         self.name = name
-        self.homeSwitch = switch
         self.preset = []
         print('Created ' + self.name)
-
+                
 class HomeSwitch():
     #jge - object to manage the limit switches used to find home
     def __init__(self, parent, switchPin, name = ''):
@@ -416,25 +415,11 @@ class HomeSwitch():
         self.name = name
         self.state = 'open'
         parent.pi.set_mode(switchPin, pigpio.INPUT)
-        self.state = parent.pi.callback(self.switchPin, pigpio.EITHER_EDGE, self.callbackFunc)
 
         print('Created ' + self.name)
 
-    def callbackFunc(self, gpio, level, tick):     
-        #jge - listen for the switch
-        prevState = self.state
-        self.state = self.parent.pi.read(self.switchPin)
-           
-        if (prevState != self.state):
-            print(self.name + ' changed - ' + str(self.state))
-            if (str(self.state) == '1')
-                #jge - stop the motor
-        
-    #def findHome():
-        #if (self.state == 'open')
-
 class Motor():
-    def __init__(self, parent, sleepPin = 0, dirPin = 0, stepPin = 0, direction = 0, name = '', coverDirection = 0, uncoverDirection = 0):
+    def __init__(self, parent, sleepPin = 0, dirPin = 0, stepPin = 0, direction = 0, name = '', coverDirection = 0, uncoverDirection = 0, switch = 0):
         #self.parent = weakref.ref(parent)
         self.parent = parent
         self.sleepPin = sleepPin
@@ -449,6 +434,10 @@ class Motor():
         self.uncoverDirection = uncoverDirection
         #jge - set up callback function to keep track of steps
         self.stepsFromHomeObject = parent.pi.callback(self.stepPin, pigpio.RISING_EDGE, self.callbackFunc)
+        self.homeSwitch = switch
+        self.homeSwitch.state = parent.pi.callback(self.homeSwitch.switchPin, pigpio.EITHER_EDGE, self.callbackFunc)
+        self.homing = 0
+        
         print('Created ' + self.name)
 
     def move(self, event, direction):        
@@ -479,8 +468,52 @@ class Motor():
         if (self.stepsFromHomeCount == 0 and self.direction != self.coverDirection):
             self.stop(self)
             print('Stopping motor ' + self.name + 'because the shade is wide open')
+
+        #jge - no matter what, if the switch is closed, stop the motor.
+        #jge - take care of zeroing in the motor stop method
+        self.homeSwitch.state = self.parent.pi.read(self.homeSwitch.switchPin)
+        if (self.homeSwitch.state == 1 and self.homing == 0):
+            #jge - set the homing flag to defeat this method while homing
+            self.homing = 1
+            self.stop(self)
+            self.homing = 0             
             
     def stop(self, event):
+        #jge - if the motor was stopped because the shade has closed
+        #jge - a limit switch, zero the motor
+        if (self.homeSwitch.state == 1):
+            #jge - move the motor until the switch is open
+            self.parent.pi.write(self.dirPin, self.coverDirection)
+
+            movingOut = []         
+            movingOut.append(pigpio.pulse(1<<self.stepPin, 0, 1100))
+            movingOut.append(pigpio.pulse(0, 1<<self.stepPin, 1100))
+            
+            while (self.parent.pi.read(self.homeSwitch.switchPin) == 1):
+                self.parent.pi.wave_clear()
+                self.parent.pi.wave_add_generic(movingOut)
+                wid = self.parent.pi.wave_create()
+                cbs = self.parent.pi.wave_send_once(wid)
+                while self.parent.pi.wave_tx_busy():
+                   time.sleep(0.1)
+                   
+            #jge - add some number of steps to completely clear the switch 
+            cushion = []
+            for x in range(1, 10):
+                cushion.append(pigpio.pulse(1<<self.stepPin, 0, 1100))
+                cushion.append(pigpio.pulse(0, 1<<self.stepPin, 1100))
+                 
+            self.parent.pi.wave_clear()
+            self.parent.pi.wave_add_generic(movingOut)
+            wid = self.parent.pi.wave_create()
+            cbs = self.parent.pi.wave_send_once(wid)
+            while self.parent.pi.wave_tx_busy():
+               time.sleep(0.1)
+
+                
+            #jge - now that off of switch, set to 0
+            self.stepsFromHomeCount = 0
+            
         #jge - stop motion then sleep
         self.parent.pi.write(self.stepPin, 0)
         self.parent.pi.write(self.sleepPin, 0)
