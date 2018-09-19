@@ -1,6 +1,8 @@
 import tkinter as tk
 import time
 import middle
+import threading as th
+
 
 class Rect():
     # (start_x, start_y) --> upper left corner
@@ -14,32 +16,26 @@ class Rect():
 
     def __init__(self, touchScreen, start_x, start_y, end_x, end_y, id):
         self.touchScreen = touchScreen
-
         self.start_x = start_x
         self.start_y = start_y
         self.end_x = end_x
         self.end_y = end_y
-
         self.id = id
-
         self.canvasDraw = tk.Canvas(self.touchScreen.gui.app, width=195, height=419, borderwidth=1)
-
         self.canvasDraw.grid(row=1, column=1, rowspan=5, ipadx=3, ipady=3)
-
         self.canvasDraw.bind('<ButtonPress-1>', lambda event: self.getStartCoords(event))
         self.canvasDraw.bind('<ButtonRelease-1>', lambda event: self.getEndCoords(event))  
+
 
     def getStartCoords(self, event):
         # figure out where the user has clicked on the canvas
         # store that point in the rect object
         # and then delete the previous rectangle
-        # canvasDraw.option_clear()
         self.start_x = event.x
         self.start_y = event.y
-
         self.canvasDraw.delete(self.id)
-
         print('Starting freehand draw')
+
 
     def getEndCoords(self, event):
         # when the user releases the mouse, get the coords there
@@ -48,17 +44,16 @@ class Rect():
         # and store the id of the new rectangle in the rect object
         self.end_x = event.x
         self.end_y = event.y
-
         i = self.canvasDraw.create_rectangle(self.start_x, self.start_y, self.end_x, self.end_y, fill="black")
-
         self.id = i
-
         print('Stopping freehand draw')         
+
 
 class FreeHandContainer():
     def __init__(self, touchScreen):
         self.touchScreen = touchScreen
         self.freehandArea = Rect(touchScreen, 0, 0, 0, 0, 0)  
+
 
 class ButtonTimer():
     timerOn = False
@@ -68,18 +63,16 @@ class ButtonTimer():
         self.timerOn = timerOn
         self.timerCount = timerCount
 
+
 class PresetButton(tk.Button):
     def __init__(self, touchScreen, presetNo, *args, **kwargs):
         tk.Button.__init__(self, *args, **kwargs)
         self.touchScreen = touchScreen
         self.presetNo = presetNo
         self.btnTimer = ButtonTimer(False, 0.0)
-
         self.bind('<ButtonPress-1>', lambda event: self.btnPress(event))
         self.bind('<ButtonRelease-1>', lambda event: self.btnRelease(event))
-
         self.configure(image=self.touchScreen.images.smallRoundButton, borderwidth=0)
-        
         self.grid(columnspan=2, ipadx=3, ipady=3)
 
     def drawGreenPreset(self, event) :
@@ -96,6 +89,12 @@ class PresetButton(tk.Button):
             self.btnTimer.timerOn = True
             self.btnTimer.timerCount = time.time()
 
+    def flashGreen(self, event):
+        event.widget.configure(image=self.touchScreen.images.smallButtonGreen)
+
+    def flashBlack(self, event):
+        event.widget.configure(image=self.touchScreen.images.smallRoundButton)
+
     def btnRelease(self, event):
         event.widget.configure(image=self.touchScreen.images.smallRoundButton)
 
@@ -104,28 +103,41 @@ class PresetButton(tk.Button):
             self.btnTimer.timerOn = False
             self.btnTimer.timerCount = time.time() - self.btnTimer.timerCount
 
-            #jge - save the preset if they held it down
+            # jge - save the preset if they held it down
             if (self.btnTimer.timerCount > 2):
                 mid.writePreset(event, self.presetNo)
-                #jge - flash to indicate successful save, but failing miserably at making it happen
+                # jge - flash to indicate successful save, but failing miserably at making it happen
+                # abj - making it happen with 5 separate threads
+                # there's probably a better way
+                t = th.Timer(0.5, lambda: event.widget.configure(image=self.touchScreen.images.smallButtonGreen))
+                t.start()
+                t1 = th.Timer(1.5, lambda: event.widget.configure(image=self.touchScreen.images.smallRoundButton))
+                t1.start()
+                t2 = th.Timer(2.5, lambda: event.widget.configure(image=self.touchScreen.images.smallButtonGreen))
+                t2.start()
+                t3 = th.Timer(3.5, lambda: event.widget.configure(image=self.touchScreen.images.smallRoundButton))
+                t3.start()
+                t4 = th.Timer(4.5, lambda: event.widget.configure(image=self.touchScreen.images.smallButtonGreen))
+                t4.start()
+                t5 = th.Timer(5.5, lambda: event.widget.configure(image=self.touchScreen.images.smallRoundButton))
+                t5.start()
+
             else:
                 mid.gotoPreset(event, self.presetNo)  
+
 
 class PresetButtonContainer():    
     def __init__(self, touchScreen):
         self.touchScreen = touchScreen
-
         self.btnPreset1 = PresetButton(self.touchScreen, 1, name="btnPreset1")
         self.btnPreset1.grid(row=1, column=6)
-
         self.btnPreset2 = PresetButton(self.touchScreen, 2, name="btnPreset2")
         self.btnPreset2.grid(row=2, column=6)
-
         self.btnPreset3 = PresetButton(self.touchScreen, 3, name="btnPreset3")
         self.btnPreset3.grid(row=4, column=6)
-
         self.btnPreset4 = PresetButton(self.touchScreen, 4, name="btnPreset4")
         self.btnPreset4.grid(row=5, column=6)
+
 
 class ManualButton(tk.Button):
     def __init__(self, touchScreen, shade, direction, image, *args, **kwargs):
@@ -135,12 +147,13 @@ class ManualButton(tk.Button):
         self.shade = shade
         self.direction = direction
 
-        #jge - properties common to all manual buttons
+        # jge - properties common to all manual buttons
         self.configure(image=image, borderwidth=0)
         self.grid(ipadx=3, ipady=3)
 
         self.bind('<ButtonRelease-1>', lambda event: mid.stop(event, self.shade))
         self.bind('<ButtonPress-1>', lambda event: mid.move(event, self.shade, self.direction))
+
 
 class ManualButtonContainer():
     def __init__(self, touchScreen):
@@ -170,41 +183,41 @@ class ManualButtonContainer():
         self.btnBottomShadeDown = ManualButton(self.touchScreen, 'bot', 0, self.touchScreen.images.arrowLeft)
         self.btnBottomShadeDown.grid(row=3, column=3)
 
+
 class BigButton(tk.Button):
-    #jge - extend tk.Button
+    # jge - extend tk.Button
     def __init__(self, presetNo, touchScreen, *args, **kwargs):
-        #jge - get a reference to the overall container
+        # jge - get a reference to the overall container
         self.touchScreen = touchScreen
-        #jge - call the constructor for tk.Button
+        # jge - call the constructor for tk.Button
         tk.Button.__init__(self, *args, **kwargs)
-        #jge - add some additional properties
+        # jge - add some additional properties
         self.presetNo = presetNo
-        #jge - set the default image for the button
+        # jge - set the default image for the button
         self.configure(image=self.touchScreen.images.bigRoundButton, borderwidth=0)
-        #jge - set default grid positions common to the big buttons
+        # jge - set default grid positions common to the big buttons
         self.grid(rowspan=2, columnspan=2, ipadx=3, ipady=3)
-        #jge - <ButtonPress-1> is the left mouse button
+        # jge - <ButtonPress-1> is the left mouse button
         self.bind('<ButtonPress-1>', lambda event: self.btnPress(event))
         self.bind('<ButtonRelease-1>', lambda event: self.btnRelease(event))
     
     def btnPress(self, event):
-        #jge - while the button is pressed, glow green
+        # jge - while the button is pressed, glow green
         event.widget.configure(image=self.touchScreen.images.bigRoundButtonGreen)
         self.touchScreen.gui.app.after(1, mid.gotoPreset(event, self.presetNo))  
 
     def btnRelease(self, event):
-        #jge - when released, set the button image back to default
+        # jge - when released, set the button image back to default
         event.widget.configure(image=self.touchScreen.images.bigRoundButton)
 
 class BigButtonContainer:
     def __init__(self, touchScreen):
         self.touchScreen = touchScreen
-
         self.btnOpenWide = BigButton(5, self.touchScreen)
         self.btnOpenWide.grid(row=1, column=3)
-
         self.btnCloseCenter = BigButton(6, self.touchScreen)
         self.btnCloseCenter.grid(row=4, column=3)
+
 
 class ImageLoader():
     def __init__(self, parent):   
@@ -240,23 +253,25 @@ class ImageLoader():
         self.smallRoundButtonOrange = tk.PhotoImage(file="images/sm-button-orange.gif")
         self.smallRoundButtonRed = tk.PhotoImage(file="images/sm-button-red.gif")
 
+
 class Gui():
     def __init__(self, parent):
         self.parent = parent
         self.app = tk.Tk()
 
         self.app.geometry("800x480")
-        #self.app.wm_attributes('-type', 'dock')
+        # self.app.wm_attributes('-type', 'dock')
         self.app.title('Slim Shady')
         self.app.option_add("Button.Background", "black")
         self.app.option_add("Button.Foreground", "white")
         self.app.resizable(0, 0)
-        #self.app.configure(background='white')
+        # self.app.configure(background='white')
 
         self.app.grid_rowconfigure(0, weight=1)
         self.app.grid_rowconfigure(6, weight=1)
         self.app.grid_columnconfigure(0, weight=1)
         self.app.grid_columnconfigure(8, weight=1)
+
 
 class TouchScreen():
     def __init__(self):
@@ -266,10 +281,11 @@ class TouchScreen():
         self.manualButtons = ManualButtonContainer(self)
         self.presetButtons = PresetButtonContainer(self)
         self.freehandInput = FreeHandContainer(self)
-        
-#jge - build middle layer to load controller or not
-#jge - depending on the gotPi value in the ini. 
+
+
+# jge - build middle layer to load controller or not
+# jge - depending on the gotPi value in the ini.
 mid = middle.Middle()
-#jge - create the main container and start the tk.mainloop()
+# jge - create the main container and start the tk.mainloop()
 touchScreen = TouchScreen()
 touchScreen.gui.app.mainloop()
