@@ -83,13 +83,13 @@ class PresetButton(tk.Button):
         self.grid(columnspan=2, ipadx=3, ipady=3)
 
     def drawGreenPreset(self, event) :
-        event.widget.configure(image=self.touchScreen.images.smallButtonGreenGlow)
+        event.widget.configure(image=self.touchScreen.images.smallButtonGreen)
     
     def drawNormalPreset(self, event) :
         event.widget.configure(image=self.touchScreen.images.smallRoundButton)
 
     def btnPress(self, event):
-        event.widget.configure(image=self.touchScreen.images.smallButtonGreenGlow)
+        event.widget.configure(image=self.touchScreen.images.smallButtonGreen)
         
         if self.btnTimer.timerOn == False:
             # if the timer is off, start it and get the current time
@@ -190,7 +190,7 @@ class BigButton(tk.Button):
     def btnPress(self, event):
         #jge - while the button is pressed, glow green
         event.widget.configure(image=self.touchScreen.images.bigRoundButtonGreen)
-        mid.gotoPreset(event, self.presetNo)  
+        self.touchScreen.gui.app.after(1, mid.gotoPreset(event, self.presetNo))  
 
     def btnRelease(self, event):
         #jge - when released, set the button image back to default
@@ -209,36 +209,36 @@ class BigButtonContainer:
 class ImageLoader():
     def __init__(self, parent):   
         self.arrowLeft = tk.PhotoImage(file="images/left-arrow-off.gif")
-        self.arrowLeftGreen = tkPhotoImage(file="images/left-arrow-green.gif")
-        self.arrowLeftBlue = tkPhotoImage(file="images/left-arrow-blue.gif")
-        self.arrowLeftOrange = tkPhotoImage(file="images/left-arrow-orange.gif")
-        self.arrowLeftRed = tkPhotoImage(file="images/left-arrow-red.gif")
+        self.arrowLeftGreen = tk.PhotoImage(file="images/left-arrow-green.gif")
+        self.arrowLeftBlue = tk.PhotoImage(file="images/left-arrow-blue.gif")
+        self.arrowLeftOrange = tk.PhotoImage(file="images/left-arrow-orange.gif")
+        self.arrowLeftRed = tk.PhotoImage(file="images/left-arrow-red.gif")
         self.arrowRight = tk.PhotoImage(file="images/right-arrow-off.gif")
-        self.arrowRightGreen = tkPhotoImage(file="images/right-arrow-green.gif")
-        self.arrowRightBlue = tkPhotoImage(file="images/right-arrow-blue.gif")
-        self.arrowRightOrange = tkPhotoImage(file="images/right-arrow-orange.gif")
-        self.arrowRightRed = tkPhotoImage(file="images/right-arrow-red.gif")
+        self.arrowRightGreen = tk.PhotoImage(file="images/right-arrow-green.gif")
+        self.arrowRightBlue = tk.PhotoImage(file="images/right-arrow-blue.gif")
+        self.arrowRightOrange = tk.PhotoImage(file="images/right-arrow-orange.gif")
+        self.arrowRightRed = tk.PhotoImage(file="images/right-arrow-red.gif")
         self.arrowUp = tk.PhotoImage(file="images/up-arrow-off.gif")
-        self.arrowUpGreen = tkPhotoImage(file="images/up-arrow-green.gif")
-        self.arrowUpBlue = tkPhotoImage(file="images/up-arrow-blue.gif")
-        self.arrowUpOrange = tkPhotoImage(file="images/up-arrow-orange.gif")
-        self.arrowUpRed = tkPhotoImage(file="images/up-arrow-red.gif")
+        self.arrowUpGreen = tk.PhotoImage(file="images/up-arrow-green.gif")
+        self.arrowUpBlue = tk.PhotoImage(file="images/up-arrow-blue.gif")
+        self.arrowUpOrange = tk.PhotoImage(file="images/up-arrow-orange.gif")
+        self.arrowUpRed = tk.PhotoImage(file="images/up-arrow-red.gif")
         self.arrowDown = tk.PhotoImage(file="images/down-arrow-off.gif")
-        self.arrowDownGreen = tkPhotoImage(file="images/down-arrow-green.gif")
-        self.arrowDownBlue = tkPhotoImage(file="images/down-arrow-blue.gif")
-        self.arrowDownOrange = tkPhotoImage(file="images/down-arrow-orange.gif")
-        self.arrowDownRed = tkPhotoImage(file="images/down-arrow-red.gif")
+        self.arrowDownGreen = tk.PhotoImage(file="images/down-arrow-green.gif")
+        self.arrowDownBlue = tk.PhotoImage(file="images/down-arrow-blue.gif")
+        self.arrowDownOrange = tk.PhotoImage(file="images/down-arrow-orange.gif")
+        self.arrowDownRed = tk.PhotoImage(file="images/down-arrow-red.gif")
         self.bigRoundButton = tk.PhotoImage(file="images/big-button-off.gif")
         self.bigRoundButtonGreen = tk.PhotoImage(file="images/big-button-green.gif")
         self.bigRoundButtonBlue = tk.PhotoImage(file="images/big-button-blue.gif")
         self.bigRoundButtonOrange = tk.PhotoImage(file="images/big-button-orange.gif")
         self.bigRoundButtonRed = tk.PhotoImage(file="images/big-button-red.gif")
-        self.smallRoundButton = tk.PhotoImage(file="images/small-button-off.gif")
-        self.smallButtonGreen = tk.PhotoImage(file="images/small-button-green.gif")
-        self.smallRoundButtonGreen = tk.PhotoImage(file="images/small-button-green.gif")
-        self.smallRoundButtonBlue = tk.PhotoImage(file="images/small-button-blue.gif")
-        self.smallRoundButtonOrange = tk.PhotoImage(file="images/small-button-orange.gif")
-        self.smallRoundButtonRed = tk.PhotoImage(file="images/small-button-red.gif")
+        self.smallRoundButton = tk.PhotoImage(file="images/sm-button-off.gif")
+        self.smallButtonGreen = tk.PhotoImage(file="images/sm-button-green.gif")
+        self.smallRoundButtonGreen = tk.PhotoImage(file="images/sm-button-green.gif")
+        self.smallRoundButtonBlue = tk.PhotoImage(file="images/sm-button-blue.gif")
+        self.smallRoundButtonOrange = tk.PhotoImage(file="images/sm-button-orange.gif")
+        self.smallRoundButtonRed = tk.PhotoImage(file="images/sm-button-red.gif")
 
 class Gui():
     def __init__(self, parent):
