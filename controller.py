@@ -413,10 +413,24 @@ class HomeSwitch():
         self.parent = parent
         self.switchPin = switchPin
         self.name = name
+        self.homing = 0
         self.state = 'open'
         parent.pi.set_mode(switchPin, pigpio.INPUT)
 
         print('Created ' + self.name)
+
+    def callbackFunc(self, gpio, level, tick, motor):     
+        self.parentMotor = motor
+
+        #jge - no matter what, if the switch is closed, stop the motor.
+        #jge - take care of zeroing in the motor stop method
+        self.state = self.parentMotor.parent.pi.read(self.switchPin)
+        if (self.state == 1):
+            print('In homeslice, going home')
+            self.homing = 1
+            self.parentMotor.stop('limit')
+            print('In homeSwitch, finished homing')  
+            self.homing = 0                  
 
 class Motor():
     def __init__(self, parent, sleepPin = 0, dirPin = 0, stepPin = 0, direction = 0, name = '', coverDirection = 0, uncoverDirection = 0, switch = 0):
@@ -435,15 +449,16 @@ class Motor():
         #jge - set up callback function to keep track of steps
         self.stepsFromHomeObject = parent.pi.callback(self.stepPin, pigpio.RISING_EDGE, self.callbackFunc)
         self.homeSwitch = switch
-        self.homeSwitch.state = parent.pi.callback(self.homeSwitch.switchPin, pigpio.EITHER_EDGE, self.callbackFunc)
-        self.homing = 0
+        #jge - todo - need to find out how many would be fully closed
+        #jge - for now set it so it doesn't interfere
+        self.maxSteps = 1000000
         
         print('Created ' + self.name)
 
     def move(self, event, direction):        
         #jge - make sure it's not running against the wide open stops
-        if (direction == self.coverDirection or
-            (direction != self.coverDirection and self.stepsFromHomeCount > 0) or
+        if ((direction == self.coverDirection and self.maxSteps > self.stepsFromHomeCount) or
+            (direction == self.uncoverDirection and self.stepsFromHomeCount > 0) or
             self.parent.stopAtWideOpen == '0'
             ):
             self.direction = direction
@@ -464,61 +479,72 @@ class Motor():
         else:
             self.stepsFromHomeCount -= 1
 
-        #jge - stop the move if it's wide open
-        if (self.stepsFromHomeCount == 0 and self.direction != self.coverDirection):
+        #jge - stop the move if it's wide open or closed
+        if ((self.stepsFromHomeCount == 0 and self.direction == self.uncoverDirection) or
+            (self.stepsFromHomeCount >= self.maxSteps and self.direction == self.coverDirection)
+           ):
             self.stop(self)
-            print('Stopping motor ' + self.name + 'because the shade is wide open')
+            print('Stopping motor ' + self.name + 'because the shade is wide open or closed')
 
         #jge - no matter what, if the switch is closed, stop the motor.
         #jge - take care of zeroing in the motor stop method
-        self.homeSwitch.state = self.parent.pi.read(self.homeSwitch.switchPin)
-        if (self.homeSwitch.state == 1 and self.homing == 0):
-            #jge - set the homing flag to defeat this method while homing
-            self.homing = 1
-            self.stop(self)
-            self.homing = 0             
+        #self.homeSwitch.state = self.parent.pi.read(self.homeSwitch.switchPin)
+        #if (self.homeSwitch.state == 1 and self.homing == 0):
+        #    #jge - set the homing flag to defeat this method while homing
+        #    self.homing = 1
+        #    self.stop(self)
+        #    self.homing = 0             
             
     def stop(self, event):
         #jge - if the motor was stopped because the shade has closed
-        #jge - a limit switch, zero the motor
-        if (self.homeSwitch.state == 1):
-            #jge - move the motor until the switch is open
-            self.parent.pi.write(self.dirPin, self.coverDirection)
+        #jge - a limit switch, then zero the motor
+        if (self.homeSwitch.state == 1 and self.homeSwitch.homing == 1):
+            self.findHome(event)
 
-            movingOut = []         
-            movingOut.append(pigpio.pulse(1<<self.stepPin, 0, 1100))
-            movingOut.append(pigpio.pulse(0, 1<<self.stepPin, 1100))
-            
-            while (self.parent.pi.read(self.homeSwitch.switchPin) == 1):
-                self.parent.pi.wave_clear()
-                self.parent.pi.wave_add_generic(movingOut)
-                wid = self.parent.pi.wave_create()
-                cbs = self.parent.pi.wave_send_once(wid)
-                while self.parent.pi.wave_tx_busy():
-                   time.sleep(0.1)
-                   
-            #jge - add some number of steps to completely clear the switch 
-            cushion = []
-            for x in range(1, 10):
-                cushion.append(pigpio.pulse(1<<self.stepPin, 0, 1100))
-                cushion.append(pigpio.pulse(0, 1<<self.stepPin, 1100))
-                 
+        #jge - stop motion then sleep
+        self.parent.pi.write(self.stepPin, 0)
+        self.parent.pi.write(self.sleepPin, 0)
+        self.sleep()
+
+    def findHome(self, event):
+        movingOut = []    
+        wid = 0
+        cbs = 0    
+        cushion = []
+        cushionStepCount = 10
+
+        #jge - move the motor away until the switch is open
+
+        #jge - set the pin direction
+        self.parent.pi.write(self.dirPin, self.coverDirection)
+        #jge - build a generic single pulse
+        movingOut.append(pigpio.pulse(1<<self.stepPin, 0, 1100))
+        movingOut.append(pigpio.pulse(0, 1<<self.stepPin, 1100))
+
+        while (self.parent.pi.read(self.homeSwitch.switchPin) == 1):
             self.parent.pi.wave_clear()
             self.parent.pi.wave_add_generic(movingOut)
             wid = self.parent.pi.wave_create()
             cbs = self.parent.pi.wave_send_once(wid)
             while self.parent.pi.wave_tx_busy():
-               time.sleep(0.1)
-
+                time.sleep(0.1)
                 
-            #jge - now that off of switch, set to 0
-            self.stepsFromHomeCount = 0
-            
-        #jge - stop motion then sleep
-        self.parent.pi.write(self.stepPin, 0)
-        self.parent.pi.write(self.sleepPin, 0)
-        self.sleep()
-        
+        #jge - add some number of steps to completely clear the switch 
+
+        for x in range(1, cushionStepCount):
+            cushion.append(pigpio.pulse(1<<self.stepPin, 0, 1100))
+            cushion.append(pigpio.pulse(0, 1<<self.stepPin, 1100))
+                
+        self.parent.pi.wave_clear()
+        self.parent.pi.wave_add_generic(movingOut)
+        wid = self.parent.pi.wave_create()
+        cbs = self.parent.pi.wave_send_once(wid)
+        while self.parent.pi.wave_tx_busy():
+            time.sleep(0.1)
+
+        #jge - now that off of switch and cushioned, set to 0
+        self.stepsFromHomeCount = 0
+
     def sleep(self):
         #jge - this turns off motor voltage
         self.parent.pi.write(self.sleepPin, 0)
