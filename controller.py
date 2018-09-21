@@ -6,7 +6,6 @@ import time
 import sys
 import operator #jge - used to find max array value and member
 import termios
-import RPi.GPIO as GPIO #jge - using for step count movement
 import tty
 
 class Unit():
@@ -79,20 +78,20 @@ class Unit():
         #################################################################
         
     def wakeUpAll(self):
-        for i, thisShade in enumerate(self.allShades):
+        for i in enumerate(self.allShades):
             self.allShades[i].motor.wakeUp()
 
     def sleepAll(self):
-        for i, thisShade in enumerate(self.allShades):
+        for i in enumerate(self.allShades):
             self.allShades[i].motor.sleep()
                 
     def uncoverAll(self):
         print('Uncovering all')
-        self.gotoPreset(5)
+        self.gotoPreset(self, 5)
 
     def coverAll(self):
         print('Covering all')
-        self.gotoPreset(6)
+        self.gotoPreset(self, 6)
 
     def stopAll(self):
         for i, thisShade in enumerate(self.allShades):
@@ -103,7 +102,7 @@ class Unit():
     def cleanup(self):
         self.environment.restoreSettings()
 
-        for i, thisShade in enumerate(self.allShades):
+        for thisShade in enumerate(self.allShades):
             print('Shutting down ' +  thisShade.name)
             thisShade.motor.stop()
 
@@ -111,10 +110,10 @@ class Unit():
 
     def writePreset(self, event, presetNo):
         #jge - write out the current position of each motor
-        for i, thisShade in enumerate(self.allShades):
+        for i in enumerate(self.allShades):
             self.config.set('presets', self.allShades[i].name + ' ' + str(presetNo), str(self.allShades[i].motor.stepsFromHomeCount))
             #jge - update the current preset that's in memory
-            self.allShades[i].preset[presetNo -1] = self.allShades[i].motor.stepsFromHomeCount;
+            self.allShades[i].preset[presetNo -1] = self.allShades[i].motor.stepsFromHomeCount
         with open(self.iniFileName, "w") as config_file:
             self.config.write(config_file)
 
@@ -129,7 +128,7 @@ class Unit():
 
     def getPresetPositions(self, presetNo):
         #jge - Use the preset number to retrieve the positions for each 
-        for i, thisShade in enumerate(self.allShades):
+        for i in enumerate(self.allShades):
             theDestination = self.allShades[i].preset[presetNo - 1]
 
             #jge - set the direction pin of each motor object also
@@ -306,11 +305,11 @@ class Unit():
             #jge - check for a stop message that a limit switch may
             #jge - have thrown.  It's a the unit because anyone could
             #jge - could have hit the switch
-            #print('going to preset')
-            #time.sleep(0.1)
+            print('going to preset')
+            time.sleep(0.1)
             if (self.haltAll == 1):
-                #print('master halt')
                 self.pi.wave_tx_stop()
+                print('master halt')
             #else:
                 #time.sleep(0.1)
 
@@ -340,9 +339,6 @@ class Unit():
         #jge - just the remainder if it's less than 256
         
         minDelay = self.environment.minDelay
-        maxDelay = self.environment.maxDelay
-        step = self.environment.stepSize
-
         wfMiddle = []
 
         #jge - store the count to feed to the wave_chain looper
@@ -358,7 +354,7 @@ class Unit():
 
         if (sortedShades[0].motor.stepsToDest > stepsAlreadyTaken):
             bitmask = 0
-            for i, thisShade in enumerate(sortedShades):
+            for i in enumerate(sortedShades):
                 if (bitmask == 0):
                     bitmask = int(1<<sortedShades[i].motor.stepPin)
                 else:
@@ -432,9 +428,10 @@ class HomeSwitch():
         self.switchPin = switchPin
         self.name = name
         self.homing = 0
-        self.state = 'open'
+        self.prevState = 0
+        self.state = 0
         parent.pi.set_mode(switchPin, pigpio.INPUT)
-        self.cbf = parent.pi.callback(self.switchPin, pigpio.EITHER_EDGE, self.callbackFunc)
+        self.cbf = parent.pi.callback(self.switchPin, pigpio.RISING_EDGE, self.callbackFunc)
         print('Created ' + self.name)
 
     def callbackFunc(self, gpio, level, tick):     
@@ -442,14 +439,18 @@ class HomeSwitch():
         #jge - take care of zeroing in the motor stop method
         #jge - also, set the haltAll at the unit to call a stop to the
         #jge - wave_chain in the case of a preset.
-        self.parent.haltAll = 1
-        self.state = self.parentMotor.parent.pi.read(self.switchPin)
-        if (self.state == 1):
+
+        self.state = self.parent.pi.read(self.switchPin)
+        if (self.state == 1 and self.prevState != self.state):
+            self.prevState = self.state
+            self.parent.haltAll = 1
+
             print('In homeslice, going home')
             self.homing = 1
             self.parentMotor.stop('limit')
             print('In homeSwitch, finished homing')  
             self.homing = 0
+            #jge todo - need to home all the motors at this point
             self.parent.haltAll = 0
 
 class Motor():
@@ -521,13 +522,12 @@ class Motor():
     def findHome(self, event):
         movingOut = []    
         wid = 0
-        cbs = 0    
         cushion = []
         cushionStepCount = 10
 
         #jge - move the motor away until the switch is open
 
-        #jge - set the pin direction
+        #jge - set the direction pin
         self.parent.pi.write(self.dirPin, self.coverDirection)
         #jge - build a generic single pulse
         movingOut.append(pigpio.pulse(1<<self.stepPin, 0, 1100))
@@ -537,20 +537,21 @@ class Motor():
             self.parent.pi.wave_clear()
             self.parent.pi.wave_add_generic(movingOut)
             wid = self.parent.pi.wave_create()
-            cbs = self.parent.pi.wave_send_once(wid)
+            self.parent.pi.wave_send_once(wid)
             while self.parent.pi.wave_tx_busy():
                 time.sleep(0.1)
                 
         #jge - add some number of steps to completely clear the switch 
-
-        for x in range(1, cushionStepCount):
+        x = 1
+        while (x < cushionStepCount):
             cushion.append(pigpio.pulse(1<<self.stepPin, 0, 1100))
             cushion.append(pigpio.pulse(0, 1<<self.stepPin, 1100))
+            x+=1
                 
         self.parent.pi.wave_clear()
         self.parent.pi.wave_add_generic(movingOut)
         wid = self.parent.pi.wave_create()
-        cbs = self.parent.pi.wave_send_once(wid)
+        self.parent.pi.wave_send_once(wid)
         while self.parent.pi.wave_tx_busy():
             time.sleep(0.1)
 
