@@ -18,7 +18,8 @@ class Unit():
         self.config = configparser.RawConfigParser()
         self.config.optionxform = str
         self.config.read(self.iniFileName)
-
+        #jge - need a master flag to halt all when a limit switch is hit during a preset move
+        self.haltAll = 0
         #jge - until the homing is working, allow the manual
         #jge - buttons to move what they think is zero
         self.stopAtWideOpen = self.config.get('config', 'stopAtWideOpen')
@@ -71,6 +72,7 @@ class Unit():
         print('Created environment')
         self.allShades = [self.leftShade, self.rightShade, self.topShade, self.botShade]
         print('Created allshades array')
+        self.sleepAll()
         print('Done with init')
            
         #jge - end Unit init
@@ -275,7 +277,9 @@ class Unit():
         #jge - this is the method that pushes the waves to the motors
         #jge - the blocks that start with 255 are loops.  The closing
         #jge - part of the loop tells pigpio how many times to loop
-        #jge - each wave and how many single iterations of it after that 
+        #jge - each wave and how many single iterations of it after that
+        #print('wfMiddle_D_Singles = ' + str(wfMiddle_D_Singles))
+        #print('wfMiddle_D_LoopCount = ' + str(wfMiddle_D_LoopCount))
         self.pi.wave_chain([
            startRamp,        
            255, 0,                       
@@ -292,9 +296,23 @@ class Unit():
            255, 1, wfMiddle_D_Singles, wfMiddle_D_LoopCount,                             
            ])
 
-        #jge - Get control of the situation.  No more phone calls
+        tempSortedShades = sorted(self.allShades, key=lambda x: x.motor.stepsToDest, reverse=False)
+
+        for i, thisShade in enumerate(tempSortedShades):
+            print(self.pi.read(tempSortedShades[i].motor.sleepPin))
+                
+        #jge - Get control of the situation.  No more phone calls                
         while self.pi.wave_tx_busy():
-           time.sleep(0.1)
+            #jge - check for a stop message that a limit switch may
+            #jge - have thrown.  It's a the unit because anyone could
+            #jge - could have hit the switch
+            #print('going to preset')
+            #time.sleep(0.1)
+            if (self.haltAll == 1):
+                #print('master halt')
+                self.pi.wave_tx_stop()
+            #else:
+                #time.sleep(0.1)
 
         pigpio.exceptions = True
 
@@ -310,7 +328,6 @@ class Unit():
             self.pi.wave_delete(middleWave_D)
 
         self.sleepAll()
-        print('Finished going to preset')
 
     def buildMiddleWave(self, stepsAlreadyTaken, sortedShades):
         #jge - This method will build an array of pulses for the
@@ -411,29 +428,32 @@ class HomeSwitch():
     #jge - object to manage the limit switches used to find home
     def __init__(self, parent, switchPin, name = ''):
         self.parent = parent
+        self.parentMotor = None
         self.switchPin = switchPin
         self.name = name
         self.homing = 0
         self.state = 'open'
         parent.pi.set_mode(switchPin, pigpio.INPUT)
-
+        self.cbf = parent.pi.callback(self.switchPin, pigpio.EITHER_EDGE, self.callbackFunc)
         print('Created ' + self.name)
 
-    def callbackFunc(self, gpio, level, tick, motor):     
-        self.parentMotor = motor
-
+    def callbackFunc(self, gpio, level, tick):     
         #jge - no matter what, if the switch is closed, stop the motor.
         #jge - take care of zeroing in the motor stop method
+        #jge - also, set the haltAll at the unit to call a stop to the
+        #jge - wave_chain in the case of a preset.
+        self.parent.haltAll = 1
         self.state = self.parentMotor.parent.pi.read(self.switchPin)
         if (self.state == 1):
             print('In homeslice, going home')
             self.homing = 1
             self.parentMotor.stop('limit')
             print('In homeSwitch, finished homing')  
-            self.homing = 0                  
+            self.homing = 0
+            self.parent.haltAll = 0
 
 class Motor():
-    def __init__(self, parent, sleepPin = 0, dirPin = 0, stepPin = 0, direction = 0, name = '', coverDirection = 0, uncoverDirection = 0, switch = 0):
+    def __init__(self, parent, sleepPin = 0, dirPin = 0, stepPin = 0, direction = 0, name = '', coverDirection = 0, uncoverDirection = 0, homeSwitch = 0):
         #self.parent = weakref.ref(parent)
         self.parent = parent
         self.sleepPin = sleepPin
@@ -448,7 +468,8 @@ class Motor():
         self.uncoverDirection = uncoverDirection
         #jge - set up callback function to keep track of steps
         self.stepsFromHomeObject = parent.pi.callback(self.stepPin, pigpio.RISING_EDGE, self.callbackFunc)
-        self.homeSwitch = switch
+        self.homeSwitch = homeSwitch
+        self.homeSwitch.parentMotor = self
         #jge - todo - need to find out how many would be fully closed
         #jge - for now set it so it doesn't interfere
         self.maxSteps = 1000000
@@ -484,16 +505,7 @@ class Motor():
             (self.stepsFromHomeCount >= self.maxSteps and self.direction == self.coverDirection)
            ):
             self.stop(self)
-            print('Stopping motor ' + self.name + 'because the shade is wide open or closed')
-
-        #jge - no matter what, if the switch is closed, stop the motor.
-        #jge - take care of zeroing in the motor stop method
-        #self.homeSwitch.state = self.parent.pi.read(self.homeSwitch.switchPin)
-        #if (self.homeSwitch.state == 1 and self.homing == 0):
-        #    #jge - set the homing flag to defeat this method while homing
-        #    self.homing = 1
-        #    self.stop(self)
-        #    self.homing = 0             
+            print('Stopping motor ' + self.name + 'because the shade is wide open or closed')       
             
     def stop(self, event):
         #jge - if the motor was stopped because the shade has closed
