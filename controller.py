@@ -306,15 +306,17 @@ class Unit():
         #jge - Get control of the situation.  No more phone calls                
         while self.pi.wave_tx_busy():
             #jge - check for a stop message that a limit switch may
-            #jge - have thrown.  It's a the unit because anyone could
+            #jge - have thrown.  It's at the unit because anyone could
             #jge - could have hit the switch
-            print('going to preset')
             time.sleep(0.1)
             if (self.haltAll == 1):
+                print('in gotoPreset - master halt. Going to clear out waves')
                 self.pi.wave_tx_stop()
-                print('master halt')
-            #else:
-                #time.sleep(0.1)
+                self.pi.wave_clear()
+                #jge - set the flag to indicate to the switch that it's
+                #jge - okay to proceed with homing
+                print('In gotoPreset - about to set goingToPreset = 0')
+                self.goingToPreset = 0
 
         pigpio.exceptions = True
     
@@ -434,7 +436,7 @@ class HomeSwitch():
         self.parentMotor = None
         self.switchPin = switchPin
         self.name = name
-        self.homing = 0
+        #self.homing = 0
         self.prevState = 0
         self.state = 0
         parent.pi.set_mode(switchPin, pigpio.INPUT)
@@ -447,23 +449,37 @@ class HomeSwitch():
         #jge - also, set the haltAll at the unit to call a stop to the
         #jge - wave_chain in the case of a preset.
         self.state = self.parent.pi.read(self.switchPin)
-        print('In homeswitch cbf state = ' + str(self.state) + ' prev state = ' + str(self.prevState))
+        print('In homeswitch cbf - 1 = state = ' + str(self.state) + ' prev state = ' + str(self.prevState))
 
         if (self.state == 1 and self.prevState != self.state):
-            print(self.name + ' switch closed')
-            #self.prevState = self.state
-            if (self.parent.goingToPreset == 1):
-                self.parent.haltAll = 1
+            print('in homeswitch cbf - 2 - ' + self.name + ' switch closed')
 
-            self.homing = 1
-            self.parentMotor.stop('limit')
-            print('In homeSwitch, finished homing')  
-            self.homing = 0
+            if (self.parent.goingToPreset == 1):
+                #jge - the pi while loop in the goto preset method
+                #jge - will hear this setting of the flag and will
+                #jge - cancel the wave send.
+             
+                print('in homeswitch cbf - 3 - Interrupting a preset move because a switch has been closed')
+                #jge - set a flag and wait for the gotoPreset to confirm that
+                #jge - the goto preset wave_chain has been canceled
+                self.parent.haltAll = 1
+                while (self.parent.goingToPreset == 1):
+                    print('in homeswitch cbf - 4 - waiting for gotoPreset to be set to 0')
+                    time.sleep(0.1)
+
+            #jge todo - need to home all the motors at this point
+            print('in homeswitch cbf - 5 - about to call homing method')
+            self.parentMotor.findHome('switch Called')
+            
+            #self.homing = 1
+            #self.parentMotor.stop('limit')
+            print('In homeSwitch cbf - 6 -  finished homing')  
+            #self.homing = 0
             #jge - reset the checker
             self.state = self.parent.pi.read(self.switchPin)
             self.prevState = self.state
-            print('In homing method - self.state = ' + str(self.state))
-            #jge todo - need to home all the motors at this point
+            print('In homswitch cbf  - 7 = self.state = ' + str(self.state))
+            
             self.parent.haltAll = 0
 
 class Motor():
@@ -525,12 +541,12 @@ class Motor():
     def stop(self, event):
         #jge - if the motor was stopped because the shade has closed
         #jge - a limit switch, then zero the motor
-        if (self.homeSwitch.state == 1 and self.homeSwitch.homing == 1):
-            print('In Motor.stop method.  About to call findHome')
-            if (self.parent.haltAll != 1):
-                self.findHome(event)
-            else:
-                print('In motor stop method during a haltAll')
+        #if (self.homeSwitch.state == 1 and self.homeSwitch.homing == 1):
+        #    print('In Motor.stop method.  About to call findHome')
+        #    if (self.parent.haltAll != 1):
+        #        self.findHome(event)
+        #    else:
+        #        print('In motor stop method during a haltAll')
 
         #jge - stop motion then sleep
         self.parent.pi.write(self.stepPin, 0)
