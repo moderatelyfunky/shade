@@ -99,7 +99,7 @@ class Unit():
         for i, thisShade in enumerate(self.allShades):
             print('Stopping ' + thisShade.name)           
             print(self.allShades[i].name + ' steps from home = ' + str(self.allShades[i].motor.stepsFromHomeCount))
-            thisShade.motor.stop()
+            thisShade.motor.stop('stopAll')
 
     def cleanup(self):
         self.environment.restoreSettings()
@@ -174,21 +174,26 @@ class Unit():
         
         wfStart = []
         pulseCount = 0
+        #jge - don't add to the array when all steps have been used
+        hasQualifier = 0
         for delay in range(maxDelay, minDelay, -step):
             bitmask = 0
             pulseCount += 1
             for i, thisShade in enumerate(sortedShades):
                 if (thisShade.motor.stepsToDest > pulseCount):
+                    hasQualifier = 1
                     if (bitmask == 0):
                         bitmask = int(1<<sortedShades[i].motor.stepPin)
                     else:
-                        bitmask += int(1<<sortedShades[i].motor.stepPin)
-                
-            #jge - now build the pulse and add it to the array
-            wfStart.append(pigpio.pulse(bitmask, 0, delay))
-            wfStart.append(pigpio.pulse(0, bitmask, delay))
+                        bitmask += int(1<<sortedShades[i].motor.stepPin)                   
 
-        
+            if (hasQualifier == 1):    
+                #jge - now build the pulse and add it to the array
+                wfStart.append(pigpio.pulse(bitmask, 0, delay))
+                wfStart.append(pigpio.pulse(0, bitmask, delay))
+            else:
+                #jge - all steps have been accounted for
+                break
         stepsAlreadyTaken = pulseCount
 
         #jge - remove any shades who may have no more steps left
@@ -257,85 +262,85 @@ class Unit():
         if (len(wfStart) > 0):
             startRamp = self.pi.wave_create()
 
-        if (len(wfMiddle_A) > 0):
-            self.pi.wave_add_generic(wfMiddle_A)
-            middleWave_A = self.pi.wave_create()
+            if (len(wfMiddle_A) > 0):
+                self.pi.wave_add_generic(wfMiddle_A)
+                middleWave_A = self.pi.wave_create()
 
-        if (len(wfMiddle_B) > 0):
-            self.pi.wave_add_generic(wfMiddle_B)
-            middleWave_B = self.pi.wave_create()
+            if (len(wfMiddle_B) > 0):
+                self.pi.wave_add_generic(wfMiddle_B)
+                middleWave_B = self.pi.wave_create()
 
-        if (len(wfMiddle_C) > 0):
-            self.pi.wave_add_generic(wfMiddle_C)
-            middleWave_C = self.pi.wave_create()
+            if (len(wfMiddle_C) > 0):
+                self.pi.wave_add_generic(wfMiddle_C)
+                middleWave_C = self.pi.wave_create()
 
-        if (len(wfMiddle_D) > 0):
-            self.pi.wave_add_generic(wfMiddle_D)
-            middleWave_D = self.pi.wave_create()
-
-        #jge - Build an array of the waves to make clean up easier
-        #allWaves = [startRamp, middleWave_A, middleWave_B, middleWave_C, middleWave_D]                                           
-
-        #jge - this is the method that pushes the waves to the motors
-        #jge - the blocks that start with 255 are loops.  The closing
-        #jge - part of the loop tells pigpio how many times to loop
-        #jge - each wave and how many single iterations of it after that
-        #print('wfMiddle_D_Singles = ' + str(wfMiddle_D_Singles))
-        #print('wfMiddle_D_LoopCount = ' + str(wfMiddle_D_LoopCount))
-        self.pi.wave_chain([
-           startRamp,        
-           255, 0,                       
-              middleWave_A,    
-           255, 1, wfMiddle_A_Singles, wfMiddle_A_LoopCount, #loop x + y*256 times
-           255, 0,                       
-              middleWave_B,    
-           255, 1, wfMiddle_B_Singles, wfMiddle_B_LoopCount,          
-           255, 0,                       
-              middleWave_C,    
-           255, 1, wfMiddle_C_Singles, wfMiddle_C_LoopCount,       
-           255, 0,                       
-              middleWave_D,    
-           255, 1, wfMiddle_D_Singles, wfMiddle_D_LoopCount,                             
-           ])
-
-        tempSortedShades = sorted(self.allShades, key=lambda x: x.motor.stepsToDest, reverse=False)
-
-        for i, thisShade in enumerate(tempSortedShades):
-            print(self.pi.read(tempSortedShades[i].motor.sleepPin))
+            if (len(wfMiddle_D) > 0):
+                self.pi.wave_add_generic(wfMiddle_D)
+                middleWave_D = self.pi.wave_create()
                 
-        #jge - Get control of the situation.  No more phone calls                
-        while self.pi.wave_tx_busy():
-            #jge - check for a stop message that a limit switch may
-            #jge - have thrown.  It's at the unit because anyone could
-            #jge - could have hit the switch
-            time.sleep(0.1)
-            if (self.haltAll == 1):
-                print('in gotoPreset - master halt. Going to clear out waves')
-                self.pi.wave_tx_stop()
-                self.pi.wave_clear()
-                #jge - set the flag to indicate to the switch that it's
-                #jge - okay to proceed with homing
-                print('In gotoPreset - about to set goingToPreset = 0')
-                self.goingToPreset = 0
+            #jge - Build an array of the waves to make clean up easier
+            #allWaves = [startRamp, middleWave_A, middleWave_B, middleWave_C, middleWave_D]                                           
 
-        pigpio.exceptions = True
-    
-        #jge - only try the clean up if it's normal operation
-        if (self.haltAll != 1):
-            if (startRamp > 0):
-                self.pi.wave_delete(startRamp)
-            if (middleWave_A > 0):
-                self.pi.wave_delete(middleWave_A)
-            if (middleWave_B > 0):
-                self.pi.wave_delete(middleWave_B)
-            if (middleWave_C > 0):
-                self.pi.wave_delete(middleWave_C)
-            if (middleWave_D > 0):
-                self.pi.wave_delete(middleWave_D)
+            #jge - this is the method that pushes the waves to the motors
+            #jge - the blocks that start with 255 are loops.  The closing
+            #jge - part of the loop tells pigpio how many times to loop
+            #jge - each wave and how many single iterations of it after that
 
-            self.sleepAll()
-            
+            self.pi.wave_chain([
+               startRamp,        
+               255, 0,                       
+                  middleWave_A,    
+               255, 1, wfMiddle_A_Singles, wfMiddle_A_LoopCount, #loop x + y*256 times
+               255, 0,                       
+                  middleWave_B,    
+               255, 1, wfMiddle_B_Singles, wfMiddle_B_LoopCount,          
+               255, 0,                       
+                  middleWave_C,    
+               255, 1, wfMiddle_C_Singles, wfMiddle_C_LoopCount,       
+               255, 0,                       
+                  middleWave_D,    
+               255, 1, wfMiddle_D_Singles, wfMiddle_D_LoopCount,                             
+               ])
+
+            tempSortedShades = sorted(self.allShades, key=lambda x: x.motor.stepsToDest, reverse=False)
+                   
+            #jge - Get control of the situation.  No more phone calls                
+            while self.pi.wave_tx_busy():
+                #jge - check for a stop message that a limit switch may
+                #jge - have thrown.  It's at the unit because anyone could
+                #jge - could have hit the switch
+                time.sleep(0.1)
+                if (self.haltAll == 1):
+                    self.pi.wave_tx_stop()
+                    self.pi.wave_clear()
+                    self.stopAll()
+                    #jge - set the flag to indicate to the switch that it's
+                    #jge - okay to proceed with homing
+                    self.goingToPreset = 0
+
+            pigpio.exceptions = True
+
+            #jge - only try the clean up if it's normal operation
+            if (self.haltAll != 1):
+                if (startRamp > 0):
+                    print('deleting startRamp')
+                    self.pi.wave_delete(startRamp)
+                if (middleWave_A > 0):
+                    print('deleting a')
+                    self.pi.wave_delete(middleWave_A)
+                if (middleWave_B > 0):
+                    print('deleting b')
+                    self.pi.wave_delete(middleWave_B)
+                if (middleWave_C > 0):
+                    print('deleting c')
+                    self.pi.wave_delete(middleWave_C)
+                if (middleWave_D > 0):
+                    print('deleting d')
+                    self.pi.wave_delete(middleWave_D)
+                    
+        self.sleepAll()
         self.goingToPreset = 0
+        self.pi.wave_clear()
 
     def buildMiddleWave(self, stepsAlreadyTaken, sortedShades):
         #jge - This method will build an array of pulses for the
@@ -449,7 +454,7 @@ class HomeSwitch():
         #jge - also, set the haltAll at the unit to call a stop to the
         #jge - wave_chain in the case of a preset.
         self.state = self.parent.pi.read(self.switchPin)
-        print('In homeswitch cbf - 1 = state = ' + str(self.state) + ' prev state = ' + str(self.prevState))
+        print('In homeswitch cbf - 1 - ' + self.name + ' state = ' + str(self.state) + ' prev state = ' + str(self.prevState))
 
         if (self.state == 1 and self.prevState != self.state):
             print('in homeswitch cbf - 2 - ' + self.name + ' switch closed')
@@ -459,26 +464,26 @@ class HomeSwitch():
                 #jge - will hear this setting of the flag and will
                 #jge - cancel the wave send.
              
-                print('in homeswitch cbf - 3 - Interrupting a preset move because a switch has been closed')
+                print('in homeswitch cbf - 3 - ' + self.name + ' Interrupting a preset move because a switch has been closed')
                 #jge - set a flag and wait for the gotoPreset to confirm that
                 #jge - the goto preset wave_chain has been canceled
                 self.parent.haltAll = 1
                 while (self.parent.goingToPreset == 1):
-                    print('in homeswitch cbf - 4 - waiting for gotoPreset to be set to 0')
+                    print('in homeswitch cbf - 4 ' + self.name + ' - waiting for gotoPreset to be set to 0')
                     time.sleep(0.1)
 
             #jge todo - need to home all the motors at this point
-            print('in homeswitch cbf - 5 - about to call homing method')
+            print('in homeswitch cbf - 5 ' + self.name + ' - about to call homing method')
             self.parentMotor.findHome('switch Called')
             
             #self.homing = 1
             #self.parentMotor.stop('limit')
-            print('In homeSwitch cbf - 6 -  finished homing')  
+            print('In homeSwitch cbf - 6 ' + self.name + ' -  finished homing')  
             #self.homing = 0
             #jge - reset the checker
             self.state = self.parent.pi.read(self.switchPin)
             self.prevState = self.state
-            print('In homswitch cbf  - 7 = self.state = ' + str(self.state))
+            print('In homswitch cbf  - 7 ' + self.name + ' = self.state = ' + str(self.state))
             
             self.parent.haltAll = 0
 
@@ -503,6 +508,7 @@ class Motor():
         #jge - todo - need to find out how many would be fully closed
         #jge - for now set it so it doesn't interfere
         self.maxSteps = 1000000
+        self.parent.pi.write(self.stepPin, 1)
         
         print('Created ' + self.name)
 
@@ -516,7 +522,7 @@ class Motor():
             self.wakeUp()
             self.parent.pi.write(self.sleepPin, 1)
             self.parent.pi.write(self.dirPin, direction)
-            self.parent.pi.write(self.stepPin, 1)
+            #self.parent.pi.write(self.stepPin, 1)
             self.parent.pi.set_PWM_dutycycle(self.stepPin, 128)  # PWM 1/2 On 1/2 Off
             self.parent.pi.set_PWM_frequency(self.stepPin, 500)
             sleep(.05)
@@ -592,7 +598,9 @@ class Motor():
 
         #jge - now that off of switch and cushioned, set to 0
         self.stepsFromHomeCount = 0
-
+        
+        self.stop('limit')
+        
     def sleep(self):
         #jge - this turns off motor voltage
         self.parent.pi.write(self.sleepPin, 0)
