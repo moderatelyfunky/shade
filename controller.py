@@ -19,10 +19,12 @@ class Unit():
         self.config.read(self.iniFileName)
         #jge - need a master flag to halt all when a limit switch is hit during a preset move
         self.haltAll = 0
+        self.goingToPreset = 0
+        
         #jge - until the homing is working, allow the manual
         #jge - buttons to move what they think is zero
         self.stopAtWideOpen = self.config.get('config', 'stopAtWideOpen')
-        
+    
         self.pi = pigpio.pi() # Connect to pigpiod daemon
         if not self.pi.connected:
            exit(0)
@@ -78,11 +80,11 @@ class Unit():
         #################################################################
         
     def wakeUpAll(self):
-        for i in enumerate(self.allShades):
+        for i, thisShade in enumerate(self.allShades):
             self.allShades[i].motor.wakeUp()
 
     def sleepAll(self):
-        for i in enumerate(self.allShades):
+        for i, thisShade in enumerate(self.allShades):
             self.allShades[i].motor.sleep()
                 
     def uncoverAll(self):
@@ -110,7 +112,7 @@ class Unit():
 
     def writePreset(self, event, presetNo):
         #jge - write out the current position of each motor
-        for i in enumerate(self.allShades):
+        for i, thisShade in enumerate(self.allShades):
             self.config.set('presets', self.allShades[i].name + ' ' + str(presetNo), str(self.allShades[i].motor.stepsFromHomeCount))
             #jge - update the current preset that's in memory
             self.allShades[i].preset[presetNo -1] = self.allShades[i].motor.stepsFromHomeCount
@@ -128,7 +130,7 @@ class Unit():
 
     def getPresetPositions(self, presetNo):
         #jge - Use the preset number to retrieve the positions for each 
-        for i in enumerate(self.allShades):
+        for i, thisShade in enumerate(self.allShades):
             theDestination = self.allShades[i].preset[presetNo - 1]
 
             #jge - set the direction pin of each motor object also
@@ -145,7 +147,8 @@ class Unit():
             
     def gotoPreset(self, event, presetNo):
         ################################
-        #jge - preset init 
+        #jge - preset init
+        self.goingToPreset = 1
         self.wakeUpAll()
         self.getPresetPositions(presetNo)
         maxDelay = self.environment.maxDelay
@@ -314,19 +317,23 @@ class Unit():
                 #time.sleep(0.1)
 
         pigpio.exceptions = True
+    
+        #jge - only try the clean up if it's normal operation
+        if (self.haltAll != 1):
+            if (startRamp > 0):
+                self.pi.wave_delete(startRamp)
+            if (middleWave_A > 0):
+                self.pi.wave_delete(middleWave_A)
+            if (middleWave_B > 0):
+                self.pi.wave_delete(middleWave_B)
+            if (middleWave_C > 0):
+                self.pi.wave_delete(middleWave_C)
+            if (middleWave_D > 0):
+                self.pi.wave_delete(middleWave_D)
 
-        if (startRamp > 0):
-            self.pi.wave_delete(startRamp)
-        if (middleWave_A > 0):
-            self.pi.wave_delete(middleWave_A)
-        if (middleWave_B > 0):
-            self.pi.wave_delete(middleWave_B)
-        if (middleWave_C > 0):
-            self.pi.wave_delete(middleWave_C)
-        if (middleWave_D > 0):
-            self.pi.wave_delete(middleWave_D)
-
-        self.sleepAll()
+            self.sleepAll()
+            
+        self.goingToPreset = 0
 
     def buildMiddleWave(self, stepsAlreadyTaken, sortedShades):
         #jge - This method will build an array of pulses for the
@@ -354,7 +361,7 @@ class Unit():
 
         if (sortedShades[0].motor.stepsToDest > stepsAlreadyTaken):
             bitmask = 0
-            for i in enumerate(sortedShades):
+            for i, thisShade in enumerate(sortedShades):
                 if (bitmask == 0):
                     bitmask = int(1<<sortedShades[i].motor.stepPin)
                 else:
@@ -439,17 +446,23 @@ class HomeSwitch():
         #jge - take care of zeroing in the motor stop method
         #jge - also, set the haltAll at the unit to call a stop to the
         #jge - wave_chain in the case of a preset.
-
         self.state = self.parent.pi.read(self.switchPin)
-        if (self.state == 1 and self.prevState != self.state):
-            self.prevState = self.state
-            self.parent.haltAll = 1
+        print('In homeswitch cbf state = ' + str(self.state) + ' prev state = ' + str(self.prevState))
 
-            print('In homeslice, going home')
+        if (self.state == 1 and self.prevState != self.state):
+            print(self.name + ' switch closed')
+            #self.prevState = self.state
+            if (self.parent.goingToPreset == 1):
+                self.parent.haltAll = 1
+
             self.homing = 1
             self.parentMotor.stop('limit')
             print('In homeSwitch, finished homing')  
             self.homing = 0
+            #jge - reset the checker
+            self.state = self.parent.pi.read(self.switchPin)
+            self.prevState = self.state
+            print('In homing method - self.state = ' + str(self.state))
             #jge todo - need to home all the motors at this point
             self.parent.haltAll = 0
 
@@ -503,16 +516,21 @@ class Motor():
 
         #jge - stop the move if it's wide open or closed
         if ((self.stepsFromHomeCount == 0 and self.direction == self.uncoverDirection) or
-            (self.stepsFromHomeCount >= self.maxSteps and self.direction == self.coverDirection)
+            (self.stepsFromHomeCount >= self.maxSteps and self.direction == self.coverDirection) or
+            (self.parent.haltAll == 1)
            ):
+            print('Stopping motor ' + self.name + 'because of a master halt or the shade is wide open or closed')       
             self.stop(self)
-            print('Stopping motor ' + self.name + 'because the shade is wide open or closed')       
             
     def stop(self, event):
         #jge - if the motor was stopped because the shade has closed
         #jge - a limit switch, then zero the motor
         if (self.homeSwitch.state == 1 and self.homeSwitch.homing == 1):
-            self.findHome(event)
+            print('In Motor.stop method.  About to call findHome')
+            if (self.parent.haltAll != 1):
+                self.findHome(event)
+            else:
+                print('In motor stop method during a haltAll')
 
         #jge - stop motion then sleep
         self.parent.pi.write(self.stepPin, 0)
@@ -520,6 +538,7 @@ class Motor():
         self.sleep()
 
     def findHome(self, event):
+        print('in findhome method')
         movingOut = []    
         wid = 0
         cushion = []
