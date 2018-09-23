@@ -193,6 +193,7 @@ class Unit():
             else:
                 #jge - all steps have been accounted for
                 break
+
         stepsAlreadyTaken = pulseCount
 
         #jge - remove any shades who may have no more steps left
@@ -285,29 +286,6 @@ class Unit():
             #jge - part of the loop tells pigpio how many times to loop
             #jge - each wave and how many single iterations of it after that
 
-            ###################################
-            #jge - original
-                
-            #self.pi.wave_chain([
-            #   startRamp,        
-            #   255, 0,                       
-            #      middleWave_A,    
-            #   255, 1, wfMiddle_A_Singles, wfMiddle_A_LoopCount, #loop x + y*256 times
-            #   255, 0,                       
-            #      middleWave_B,    
-            #   255, 1, wfMiddle_B_Singles, wfMiddle_B_LoopCount,          
-            #   255, 0,                       
-            #      middleWave_C,    
-            #   255, 1, wfMiddle_C_Singles, wfMiddle_C_LoopCount,       
-            #   255, 0,                       
-            #      middleWave_D,    
-            #   255, 1, wfMiddle_D_Singles, wfMiddle_D_LoopCount,                             
-            #   ])
-            #jge - end original
-            ######################################
-
-            ######################################
-            #jge- new
             try:
                 if (len(wfMiddle_D) > 0):
                     #jge - all elements have length
@@ -371,8 +349,6 @@ class Unit():
 
             except Exception as e:
                 print(str(e))
-            #jge - end new
-            ######################################
             
             tempSortedShades = sorted(self.allShades, key=lambda x: x.motor.stepsToDest, reverse=False)
                    
@@ -573,6 +549,7 @@ class Motor():
         self.stepsToDest = 0
         self.stepsFromHomeObject = None
         self.stepsFromHomeCount = 0
+        self.newStepsFromHomeCount = 0
         self.coverDirection = coverDirection
         self.uncoverDirection = uncoverDirection
         #jge - set up callback function to keep track of steps
@@ -597,32 +574,21 @@ class Motor():
             self.wakeUp()
             self.parent.pi.write(self.sleepPin, 1)
             self.parent.pi.write(self.dirPin, direction)
-            '''
+            
             ##########################
             #jge - new way
-            self.parent.pi.wave_clear()
-            mover = []
-            wid = 0
-            #jge - build a generic single pulse
-            mover.append(pigpio.pulse(1<<self.stepPin, 0, 1100))
-            mover.append(pigpio.pulse(0, 1<<self.stepPin, 1100))
-
-            #self.moving = 1
-            ############
-            self.parent.pi.wave_add_generic(mover)
-            wid = self.parent.pi.wave_create()
-            self.parent.pi.wave_send_once(wid)
-            while self.parent.pi.wave_tx_busy():
-                time.sleep(0.1)
-            print('in move.  Just moved')
-            ################
-            
-            while (self.moving == 1):
-                wid = self.parent.pi.wave_create()
-                self.parent.pi.wave_send_once(wid)
-                while self.parent.pi.wave_tx_busy():
-                    time.sleep()
-                self.wave_delete(wid)
+            tickrate = 100                                                            # ticks per second
+            ticktime=int(round(1000000 / tickrate))          # tick time in microseconds
+            pulsetime= 2                                                             # length of pulse to step motor
+            sleeptime=ticktime-pulsetime/1000000         # how long to sleep
+            moving = 1
+            while moving == 1:
+                self.parent.pi. gpio_trigger(self.stepPin, pulsetime, 0)                      # pulse the step pin on off (or off on if 3rd param is 1)
+                time.sleep(sleeptime)
+                if (self.direction == self.coverDirection):
+                    self.newStepsFromHomeCount += 1
+                else:
+                    self.newStepsFromHomeCount -= 1
             #jge - end new way
             ##########################
             '''
@@ -633,7 +599,7 @@ class Motor():
             sleep(.05)
             #jge- end old way
             #########################
-            
+            '''
         else:
             print('Cant open ' + self.name + ' any further')
         
@@ -651,26 +617,16 @@ class Motor():
            ):
             print('Stopping motor ' + self.name + 'because of a master halt or the shade is wide open or closed')       
             self.stop(self)
-            
+        
+        print('old counter = ' + str(self.stepsFromHomeCount) + ' :: new counter = ' + str(self.newStepsFromHomeCount))
     def stop(self, event):
-        #jge - if the motor was stopped because the shade has closed
-        #jge - a limit switch, then zero the motor
-        #if (self.homeSwitch.state == 1 and self.homeSwitch.homing == 1):
-        #    print('In Motor.stop method.  About to call findHome')
-        #    if (self.parent.haltAll != 1):
-        #        self.findHome(event)
-        #    else:
-        #        print('In motor stop method during a haltAll')
         print('in stop.  writing self.moving to 0')
         self.moving = 0
+
         #jge - stop motion then sleep
-        ########################################
-        #jge - old way
         self.parent.pi.write(self.stepPin, 0)
         self.parent.pi.write(self.sleepPin, 0)
-        #jge - end old way
-        ########################################
-        
+
         self.sleep()
 
     def findHome(self, event):
@@ -680,10 +636,9 @@ class Motor():
         cushion = []
         cushionStepCount = 10
 
-        #jge - move the motor away until the switch is open
-
         #jge - set the direction pin
         self.parent.pi.write(self.dirPin, self.coverDirection)
+
         #jge - build a generic single pulse
         movingOut.append(pigpio.pulse(1<<self.stepPin, 0, 1100))
         movingOut.append(pigpio.pulse(0, 1<<self.stepPin, 1100))
