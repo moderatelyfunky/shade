@@ -539,7 +539,6 @@ class HomeSwitch():
 
 class Motor():
     def __init__(self, parent, sleepPin = 0, dirPin = 0, stepPin = 0, direction = 0, name = '', coverDirection = 0, uncoverDirection = 0, homeSwitch = 0):
-        #self.parent = weakref.ref(parent)
         self.parent = parent
         self.sleepPin = sleepPin
         self.dirPin = dirPin
@@ -549,7 +548,6 @@ class Motor():
         self.stepsToDest = 0
         self.stepsFromHomeObject = None
         self.stepsFromHomeCount = 0
-        self.newStepsFromHomeCount = 0
         self.coverDirection = coverDirection
         self.uncoverDirection = uncoverDirection
         #jge - set up callback function to keep track of steps
@@ -560,7 +558,6 @@ class Motor():
         #jge - for now set it so it doesn't interfere
         self.maxSteps = 1000000
         self.parent.pi.write(self.stepPin, 1)
-        self.moving = 0
         
         print('Created ' + self.name)
 
@@ -574,52 +571,9 @@ class Motor():
             self.wakeUp()
             self.parent.pi.write(self.sleepPin, 1)
             self.parent.pi.write(self.dirPin, direction)
-
-            movingOut = []    
-            wid = 0
-
-            #jge - build a generic single pulse
-            movingOut.append(pigpio.pulse(1<<self.stepPin, 0, 1100))
-            movingOut.append(pigpio.pulse(0, 1<<self.stepPin, 1100))
-
-            self.parent.pi.wave_clear()
-            self.parent.pi.wave_add_generic(movingOut)
-            wid = self.parent.pi.wave_create()
-            self.parent.pi.wave_send_repeat(wid)
-            if (self.direction == self.coverDirection):
-                self.newStepsFromHomeCount += 1
-            else:
-                self.newStepsFromHomeCount -= 1            
-            #while self.parent.pi.wave_tx_busy():
-            #    time.sleep(0.1)
-            
-            '''
-            ##########################
-            #jge - new way
-            tickrate = 100                                                            # ticks per second
-            ticktime=int(round(1000000 / tickrate))          # tick time in microseconds
-            pulsetime= 2                                                             # length of pulse to step motor
-            sleeptime=ticktime-pulsetime/1000000         # how long to sleep
-            moving = 1
-            while moving == 1:
-                #self.parent.pi. gpio_trigger(self.stepPin, pulsetime, 0)                      # pulse the step pin on off (or off on if 3rd param is 1)
-                time.sleep(sleeptime)
-                if (self.direction == self.coverDirection):
-                    self.newStepsFromHomeCount += 1
-                else:
-                    self.newStepsFromHomeCount -= 1
-            #jge - end new way
-            ##########################
-            '''
-            '''
-            ##########################
-            #jge - old way
             self.parent.pi.set_PWM_dutycycle(self.stepPin, 128)  # PWM 1/2 On 1/2 Off
             self.parent.pi.set_PWM_frequency(self.stepPin, 500)
             sleep(.05)
-            #jge- end old way
-            #########################
-            '''
         else:
             print('Cant open ' + self.name + ' any further')
         
@@ -638,12 +592,8 @@ class Motor():
            ):
             print('Stopping motor ' + self.name + 'because of a master halt or the shade is wide open or closed')       
             self.stop(self)
-        
-        print('old counter = ' + str(self.stepsFromHomeCount) + ' :: new counter = ' + str(self.newStepsFromHomeCount))
-    def stop(self, event):
-        print('in stop.  writing self.moving to 0')
-        self.moving = 0
 
+    def stop(self, event):
         #jge - stop motion then sleep
         self.parent.pi.wave_tx_stop()
         self.parent.pi.wave_clear()
