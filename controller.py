@@ -574,7 +574,26 @@ class Motor():
             self.wakeUp()
             self.parent.pi.write(self.sleepPin, 1)
             self.parent.pi.write(self.dirPin, direction)
+
+            movingOut = []    
+            wid = 0
+
+            #jge - build a generic single pulse
+            movingOut.append(pigpio.pulse(1<<self.stepPin, 0, 1100))
+            movingOut.append(pigpio.pulse(0, 1<<self.stepPin, 1100))
+
+            self.parent.pi.wave_clear()
+            self.parent.pi.wave_add_generic(movingOut)
+            wid = self.parent.pi.wave_create()
+            self.parent.pi.wave_send_repeat(wid)
+            if (self.direction == self.coverDirection):
+                self.newStepsFromHomeCount += 1
+            else:
+                self.newStepsFromHomeCount -= 1            
+            #while self.parent.pi.wave_tx_busy():
+            #    time.sleep(0.1)
             
+            '''
             ##########################
             #jge - new way
             tickrate = 100                                                            # ticks per second
@@ -583,7 +602,7 @@ class Motor():
             sleeptime=ticktime-pulsetime/1000000         # how long to sleep
             moving = 1
             while moving == 1:
-                self.parent.pi. gpio_trigger(self.stepPin, pulsetime, 0)                      # pulse the step pin on off (or off on if 3rd param is 1)
+                #self.parent.pi. gpio_trigger(self.stepPin, pulsetime, 0)                      # pulse the step pin on off (or off on if 3rd param is 1)
                 time.sleep(sleeptime)
                 if (self.direction == self.coverDirection):
                     self.newStepsFromHomeCount += 1
@@ -591,6 +610,7 @@ class Motor():
                     self.newStepsFromHomeCount -= 1
             #jge - end new way
             ##########################
+            '''
             '''
             ##########################
             #jge - old way
@@ -604,6 +624,7 @@ class Motor():
             print('Cant open ' + self.name + ' any further')
         
     def callbackFunc(self, gpio, level, tick):     
+
         #jge - figure out whether to add or subtract the steps
         if (self.direction == self.coverDirection):
             self.stepsFromHomeCount += 1
@@ -624,6 +645,8 @@ class Motor():
         self.moving = 0
 
         #jge - stop motion then sleep
+        self.parent.pi.wave_tx_stop()
+        self.parent.pi.wave_clear()
         self.parent.pi.write(self.stepPin, 0)
         self.parent.pi.write(self.sleepPin, 0)
 
