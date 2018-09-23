@@ -75,7 +75,6 @@ class Unit():
         print('Created allshades array')
         self.sleepAll()
         print('Done with init')
-           
         #jge - end Unit init
         #################################################################
         
@@ -286,22 +285,95 @@ class Unit():
             #jge - part of the loop tells pigpio how many times to loop
             #jge - each wave and how many single iterations of it after that
 
-            self.pi.wave_chain([
-               startRamp,        
-               255, 0,                       
-                  middleWave_A,    
-               255, 1, wfMiddle_A_Singles, wfMiddle_A_LoopCount, #loop x + y*256 times
-               255, 0,                       
-                  middleWave_B,    
-               255, 1, wfMiddle_B_Singles, wfMiddle_B_LoopCount,          
-               255, 0,                       
-                  middleWave_C,    
-               255, 1, wfMiddle_C_Singles, wfMiddle_C_LoopCount,       
-               255, 0,                       
-                  middleWave_D,    
-               255, 1, wfMiddle_D_Singles, wfMiddle_D_LoopCount,                             
-               ])
+            ###################################
+            #jge - original
+                
+            #self.pi.wave_chain([
+            #   startRamp,        
+            #   255, 0,                       
+            #      middleWave_A,    
+            #   255, 1, wfMiddle_A_Singles, wfMiddle_A_LoopCount, #loop x + y*256 times
+            #   255, 0,                       
+            #      middleWave_B,    
+            #   255, 1, wfMiddle_B_Singles, wfMiddle_B_LoopCount,          
+            #   255, 0,                       
+            #      middleWave_C,    
+            #   255, 1, wfMiddle_C_Singles, wfMiddle_C_LoopCount,       
+            #   255, 0,                       
+            #      middleWave_D,    
+            #   255, 1, wfMiddle_D_Singles, wfMiddle_D_LoopCount,                             
+            #   ])
+            #jge - end original
+            ######################################
 
+            ######################################
+            #jge- new
+            try:
+                if (len(wfMiddle_D) > 0):
+                    #jge - all elements have length
+                    self.pi.wave_chain([
+                       startRamp,        
+                       255, 0,                       
+                          middleWave_A,    
+                       255, 1, wfMiddle_A_Singles, wfMiddle_A_LoopCount, #loop x + y*256 times
+                       255, 0,                       
+                          middleWave_B,    
+                       255, 1, wfMiddle_B_Singles, wfMiddle_B_LoopCount,          
+                       255, 0,                       
+                          middleWave_C,    
+                       255, 1, wfMiddle_C_Singles, wfMiddle_C_LoopCount,       
+                       255, 0,                       
+                          middleWave_D,    
+                       255, 1, wfMiddle_D_Singles, wfMiddle_D_LoopCount,                             
+                       ])
+                else:
+                    if (len(wfMiddle_C) > 0):
+                        #jge - C is last
+                        self.pi.wave_chain([
+                           startRamp,        
+                           255, 0,                       
+                              middleWave_A,    
+                           255, 1, wfMiddle_A_Singles, wfMiddle_A_LoopCount, #loop x + y*256 times
+                           255, 0,                       
+                              middleWave_B,    
+                           255, 1, wfMiddle_B_Singles, wfMiddle_B_LoopCount,          
+                           255, 0,                       
+                              middleWave_C,    
+                           255, 1, wfMiddle_C_Singles, wfMiddle_C_LoopCount,                                  
+                           ])                
+                    else:
+                        if (len(wfMiddle_B) > 0):
+                            #jge - B is last
+                            self.pi.wave_chain([
+                               startRamp,        
+                               255, 0,                       
+                                  middleWave_A,    
+                               255, 1, wfMiddle_A_Singles, wfMiddle_A_LoopCount, #loop x + y*256 times
+                               255, 0,                       
+                                  middleWave_B,    
+                               255, 1, wfMiddle_B_Singles, wfMiddle_B_LoopCount,          
+                               ])           
+                        else:
+                            if (len(wfMiddle_A) > 0):
+                                #jge - A is last
+                                self.pi.wave_chain([
+                                   startRamp,        
+                                   255, 0,                       
+                                      middleWave_A,    
+                                   255, 1, wfMiddle_A_Singles, wfMiddle_A_LoopCount, #loop x + y*256 times
+                                   ])           
+                            else:
+                                if (len(wfStart) > 0):
+                                    #jge - startRamp is last
+                                    self.pi.wave_chain([
+                                       startRamp,        
+                                       ])           
+
+            except Exception as e:
+                print(str(e))
+            #jge - end new
+            ######################################
+            
             tempSortedShades = sorted(self.allShades, key=lambda x: x.motor.stepsToDest, reverse=False)
                    
             #jge - Get control of the situation.  No more phone calls                
@@ -445,6 +517,8 @@ class HomeSwitch():
         self.prevState = 0
         self.state = 0
         parent.pi.set_mode(switchPin, pigpio.INPUT)
+        #jge - using internal resistors in addition to external
+        parent.pi.set_pull_up_down(switchPin, pigpio.PUD_DOWN)
         self.cbf = parent.pi.callback(self.switchPin, pigpio.RISING_EDGE, self.callbackFunc)
         print('Created ' + self.name)
 
@@ -509,6 +583,7 @@ class Motor():
         #jge - for now set it so it doesn't interfere
         self.maxSteps = 1000000
         self.parent.pi.write(self.stepPin, 1)
+        self.moving = 0
         
         print('Created ' + self.name)
 
@@ -522,10 +597,43 @@ class Motor():
             self.wakeUp()
             self.parent.pi.write(self.sleepPin, 1)
             self.parent.pi.write(self.dirPin, direction)
-            #self.parent.pi.write(self.stepPin, 1)
+            '''
+            ##########################
+            #jge - new way
+            self.parent.pi.wave_clear()
+            mover = []
+            wid = 0
+            #jge - build a generic single pulse
+            mover.append(pigpio.pulse(1<<self.stepPin, 0, 1100))
+            mover.append(pigpio.pulse(0, 1<<self.stepPin, 1100))
+
+            #self.moving = 1
+            ############
+            self.parent.pi.wave_add_generic(mover)
+            wid = self.parent.pi.wave_create()
+            self.parent.pi.wave_send_once(wid)
+            while self.parent.pi.wave_tx_busy():
+                time.sleep(0.1)
+            print('in move.  Just moved')
+            ################
+            
+            while (self.moving == 1):
+                wid = self.parent.pi.wave_create()
+                self.parent.pi.wave_send_once(wid)
+                while self.parent.pi.wave_tx_busy():
+                    time.sleep()
+                self.wave_delete(wid)
+            #jge - end new way
+            ##########################
+            '''
+            ##########################
+            #jge - old way
             self.parent.pi.set_PWM_dutycycle(self.stepPin, 128)  # PWM 1/2 On 1/2 Off
             self.parent.pi.set_PWM_frequency(self.stepPin, 500)
             sleep(.05)
+            #jge- end old way
+            #########################
+            
         else:
             print('Cant open ' + self.name + ' any further')
         
@@ -553,10 +661,16 @@ class Motor():
         #        self.findHome(event)
         #    else:
         #        print('In motor stop method during a haltAll')
-
+        print('in stop.  writing self.moving to 0')
+        self.moving = 0
         #jge - stop motion then sleep
+        ########################################
+        #jge - old way
         self.parent.pi.write(self.stepPin, 0)
         self.parent.pi.write(self.sleepPin, 0)
+        #jge - end old way
+        ########################################
+        
         self.sleep()
 
     def findHome(self, event):
