@@ -177,7 +177,8 @@ class Unit():
         hasQualifier = 0
         for delay in range(maxDelay, minDelay, -step):
             bitmask = 0
-            pulseCount += 1
+            #pulseCount += 1
+            hasQualifier = 0
             for i, thisShade in enumerate(sortedShades):
                 if (thisShade.motor.stepsToDest > pulseCount):
                     hasQualifier = 1
@@ -188,6 +189,7 @@ class Unit():
 
             if (hasQualifier == 1):    
                 #jge - now build the pulse and add it to the array
+                pulseCount += 1
                 wfStart.append(pigpio.pulse(bitmask, 0, delay))
                 wfStart.append(pigpio.pulse(0, bitmask, delay))
             else:
@@ -257,29 +259,34 @@ class Unit():
         #jge - into waves that will be fed to pigpio with the wave_chain
         #jge - method
         self.pi.wave_add_generic(wfStart)
+        
+        #jge - Build an array of the waves to make clean up easier
+        allWaves = []                                           
 
         #jge - make sure won't get empty wave errors
         if (len(wfStart) > 0):
             startRamp = self.pi.wave_create()
+            allWaves.append(startRamp)
 
             if (len(wfMiddle_A) > 0):
                 self.pi.wave_add_generic(wfMiddle_A)
                 middleWave_A = self.pi.wave_create()
-
+                allWaves.append(middleWave_A)
+            
             if (len(wfMiddle_B) > 0):
                 self.pi.wave_add_generic(wfMiddle_B)
                 middleWave_B = self.pi.wave_create()
+                allWaves.append(middleWave_B)
 
             if (len(wfMiddle_C) > 0):
                 self.pi.wave_add_generic(wfMiddle_C)
                 middleWave_C = self.pi.wave_create()
+                allWaves.append(middleWave_C)
 
             if (len(wfMiddle_D) > 0):
                 self.pi.wave_add_generic(wfMiddle_D)
                 middleWave_D = self.pi.wave_create()
-                
-            #jge - Build an array of the waves to make clean up easier
-            #allWaves = [startRamp, middleWave_A, middleWave_B, middleWave_C, middleWave_D]                                           
+                allWaves.append(middleWave_D)                
 
             #jge - this is the method that pushes the waves to the motors
             #jge - the blocks that start with 255 are loops.  The closing
@@ -350,14 +357,14 @@ class Unit():
             except Exception as e:
                 print(str(e))
             
-            tempSortedShades = sorted(self.allShades, key=lambda x: x.motor.stepsToDest, reverse=False)
+            #tempSortedShades = sorted(self.allShades, key=lambda x: x.motor.stepsToDest, reverse=False)
                    
             #jge - Get control of the situation.  No more phone calls                
             while self.pi.wave_tx_busy():
                 #jge - check for a stop message that a limit switch may
                 #jge - have thrown.  It's at the unit because anyone could
                 #jge - could have hit the switch
-                time.sleep(0.1)
+                
                 if (self.haltAll == 1):
                     self.pi.wave_tx_stop()
                     self.pi.wave_clear()
@@ -366,8 +373,14 @@ class Unit():
                     #jge - okay to proceed with homing
                     self.goingToPreset = 0
 
+                time.sleep(0.1)
+                
             pigpio.exceptions = True
 
+            for i in range(len(allWaves)):
+                print('deleting a wave -' + str(i) + '-')
+                self.pi.wave_delete(allWaves[i])
+            '''
             #jge - only try the clean up if it's normal operation
             if (self.haltAll != 1):
                 if (startRamp > 0):
@@ -385,7 +398,8 @@ class Unit():
                 if (middleWave_D > 0):
                     print('deleting d')
                     self.pi.wave_delete(middleWave_D)
-                    
+            '''
+
         self.sleepAll()
         self.goingToPreset = 0
         self.pi.wave_clear()
