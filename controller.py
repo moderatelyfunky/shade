@@ -252,9 +252,6 @@ class Unit():
             sortedShades.remove(sortedShades[0])
             stepsAlreadyTaken += (wfMiddle_D_LoopCount * 256) + wfMiddle_D_Singles
 
-        #jge - Clear out any waves that may not have been cleaned up
-        self.pi.wave_clear()
-
         #jge - Use Wave_add_generic to "convert" the arrays of pulses
         #jge - into waves that will be fed to pigpio with the wave_chain
         #jge - method
@@ -356,9 +353,7 @@ class Unit():
 
             except Exception as e:
                 print(str(e))
-            
-            #tempSortedShades = sorted(self.allShades, key=lambda x: x.motor.stepsToDest, reverse=False)
-                   
+                        
             #jge - Get control of the situation.  No more phone calls                
             while self.pi.wave_tx_busy():
                 #jge - check for a stop message that a limit switch may
@@ -367,7 +362,6 @@ class Unit():
                 
                 if (self.haltAll == 1):
                     self.pi.wave_tx_stop()
-                    self.pi.wave_clear()
                     self.stopAll()
                     #jge - set the flag to indicate to the switch that it's
                     #jge - okay to proceed with homing
@@ -377,32 +371,22 @@ class Unit():
                 
             pigpio.exceptions = True
 
-            for i in range(len(allWaves)):
-                print('deleting a wave -' + str(i) + '-')
-                self.pi.wave_delete(allWaves[i])
-            '''
-            #jge - only try the clean up if it's normal operation
             if (self.haltAll != 1):
-                if (startRamp > 0):
-                    print('deleting startRamp')
-                    self.pi.wave_delete(startRamp)
-                if (middleWave_A > 0):
-                    print('deleting a')
-                    self.pi.wave_delete(middleWave_A)
-                if (middleWave_B > 0):
-                    print('deleting b')
-                    self.pi.wave_delete(middleWave_B)
-                if (middleWave_C > 0):
-                    print('deleting c')
-                    self.pi.wave_delete(middleWave_C)
-                if (middleWave_D > 0):
-                    print('deleting d')
-                    self.pi.wave_delete(middleWave_D)
-            '''
+                for i in range(len(allWaves)):
+                    print('deleting a wave -' + str(i) + '-')
+                    try:
+                        self.pi.wave_delete(allWaves[i])
+                    except Exception as e:
+                        print(str(e))
 
         self.sleepAll()
         self.goingToPreset = 0
         self.pi.wave_clear()
+
+        #jge - compare what the callback has counted with the prests
+        for i, thisShade in enumerate(self.allShades):
+            print(self.allShades[i].name + ' shade is ' + str(self.allShades[i].motor.stepsFromHomeCount) + ' steps from home')
+        
 
     def buildMiddleWave(self, stepsAlreadyTaken, sortedShades):
         #jge - This method will build an array of pulses for the
@@ -604,13 +588,16 @@ class Motor():
             (self.stepsFromHomeCount >= self.maxSteps and self.direction == self.coverDirection) or
             (self.parent.haltAll == 1)
            ):
-            print('Stopping motor ' + self.name + 'because of a master halt or the shade is wide open or closed')       
+            print('in Motor cbf - Stopping motor ' + self.name +
+                  ' haltAll = ' + str(self.parent.haltAll) +
+                  ' stepsFromHome = ' + str(self.stepsFromHomeCount) +
+                  ' dir = ' + str(self.direction) +
+                  ' cov dir = ' + str(self.coverDirection))       
             self.stop(self)
 
     def stop(self, event):
         #jge - stop motion then sleep
         self.parent.pi.wave_tx_stop()
-        self.parent.pi.wave_clear()
         self.parent.pi.write(self.stepPin, 0)
         self.parent.pi.write(self.sleepPin, 0)
 
@@ -631,7 +618,6 @@ class Motor():
         movingOut.append(pigpio.pulse(0, 1<<self.stepPin, 1100))
 
         while (self.parent.pi.read(self.homeSwitch.switchPin) == 1):
-            self.parent.pi.wave_clear()
             self.parent.pi.wave_add_generic(movingOut)
             wid = self.parent.pi.wave_create()
             self.parent.pi.wave_send_once(wid)
@@ -645,7 +631,6 @@ class Motor():
             cushion.append(pigpio.pulse(0, 1<<self.stepPin, 1100))
             x+=1
                 
-        self.parent.pi.wave_clear()
         self.parent.pi.wave_add_generic(movingOut)
         wid = self.parent.pi.wave_create()
         self.parent.pi.wave_send_once(wid)
@@ -656,6 +641,7 @@ class Motor():
         self.stepsFromHomeCount = 0
         
         self.stop('limit')
+        self.parent.pi.wave_clear()
         
     def sleep(self):
         #jge - this turns off motor voltage
@@ -664,3 +650,29 @@ class Motor():
     def wakeUp(self):
         #jge - this restores power to the motor
         self.parent.pi.write(self.sleepPin, 1)
+
+'''
+log.  Why is one zero stopping all?
+deleting a wave -0-
+deleting a wave -1-
+deleting a wave -2-
+deleting a wave -3-
+deleting a wave -4-
+left shade shade is 6590 steps from home
+right shade shade is 6520 steps from home
+top shade shade is 1599 steps from home
+bot shade shade is 15565 steps from home
+Finished going to preset 4
+in Motor cbf - Stopping motor motor 2 haltAll = 0 stepsFromHome = 0 dir = 1 cov dir = 0
+deleting a wave -0-
+deleting a wave -1-
+deleting a wave -2-
+deleting a wave -3-
+deleting a wave -4-
+left shade shade is 4990 steps from home
+right shade shade is 4920 steps from home
+top shade shade is 0 steps from home
+bot shade shade is 13965 steps from home
+Finished going to preset 5
+
+'''
