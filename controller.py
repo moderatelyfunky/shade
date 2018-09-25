@@ -7,6 +7,7 @@ import sys
 import operator #jge - used to find max array value and member
 import termios
 import tty
+import logging
 
 class Unit():
     #jge - this is the main point of entry for control from the gui
@@ -17,6 +18,10 @@ class Unit():
         self.config = configparser.RawConfigParser()
         self.config.optionxform = str
         self.config.read(self.iniFileName)
+        #jge - set up logging
+        if (str(self.config.get('config', 'logEvents')) == '1'):
+            self.logger = logging.getLogger('shadeLog')
+
         #jge - need a master flag to halt all when a limit switch is hit during a preset move
         self.haltAll = 0
         self.goingToPreset = 0
@@ -24,7 +29,7 @@ class Unit():
         #jge - until the homing is working, allow the manual
         #jge - buttons to move what they think is zero
         self.stopAtWideOpen = self.config.get('config', 'stopAtWideOpen')
-    
+
         self.pi = pigpio.pi() # Connect to pigpiod daemon
         if not self.pi.connected:
            exit(0)
@@ -70,14 +75,40 @@ class Unit():
         #jge - 7th argument - How much to gain between the min and max in each loop  
         #################################################################
         self.environment = Environment(self, 'Full', 14, 15, 18, 1100, 400, 1) 
-        print('Created environment')
+        self.pAL('Created environment', 'info')
         self.allShades = [self.leftShade, self.rightShade, self.topShade, self.botShade]
-        print('Created allshades array')
+        self.pAL('Created allshades array', 'info')
         self.sleepAll()
-        print('Done with init')
+        self.pAL('Done with init', 'info')
         #jge - end Unit init
         #################################################################
-        
+    
+    def pAL(self, message, level):
+        #jge - write to console
+        print(message)
+
+        #jge - write to log
+        if (level == 'error'):
+            self.logger.error(message)
+        elif (level == None):
+            self.logger.info(message)
+
+    def startLogging(self):  
+        ch = logging.StreamHandler()
+        ch.setLevel(logging.DEBUG)
+
+        # create formatter
+        formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+
+        # add formatter to ch
+        ch.setFormatter(formatter)
+
+        # add ch to logger
+        self.logger.addHandler(ch)
+
+        self.pAL('Program startup', 'info')
+        #jge - there are more advanced, built in logging features like auto next day
+
     def wakeUpAll(self):
         for i, thisShade in enumerate(self.allShades):
             self.allShades[i].motor.wakeUp()
@@ -87,24 +118,24 @@ class Unit():
             self.allShades[i].motor.sleep()
                 
     def uncoverAll(self):
-        print('Uncovering all')
+        self.pAL('Uncovering all', 'info')
         self.gotoPreset(self, 5)
 
     def coverAll(self):
-        print('Covering all')
+        self.pAL('Covering all', 'info')
         self.gotoPreset(self, 6)
 
     def stopAll(self):
         for i, thisShade in enumerate(self.allShades):
-            print('Stopping ' + thisShade.name)           
-            print(self.allShades[i].name + ' steps from home = ' + str(self.allShades[i].motor.stepsFromHomeCount))
+            self.pAL('Stopping ' + thisShade.name, 'info')           
+            self.pAL(self.allShades[i].name + ' steps from home = ' + str(self.allShades[i].motor.stepsFromHomeCount), 'info')
             thisShade.motor.stop('stopAll')
 
     def cleanup(self):
         self.environment.restoreSettings()
 
         for thisShade in enumerate(self.allShades):
-            print('Shutting down ' +  thisShade.name)
+            self.pAL('Shutting down ' +  thisShade.name, 'info')
             thisShade.motor.stop()
 
         self.pi.stop()
@@ -177,7 +208,6 @@ class Unit():
         hasQualifier = 0
         for delay in range(maxDelay, minDelay, -step):
             bitmask = 0
-            #pulseCount += 1
             hasQualifier = 0
             for i, thisShade in enumerate(sortedShades):
                 if (thisShade.motor.stepsToDest > pulseCount):
@@ -260,7 +290,7 @@ class Unit():
         #jge - Build an array of the waves to make clean up easier
         allWaves = []                                           
 
-        #jge - make sure won't get empty wave errors
+        #jge - make sure not to get empty wave errors
         if (len(wfStart) > 0):
             startRamp = self.pi.wave_create()
             allWaves.append(startRamp)
@@ -310,12 +340,12 @@ class Unit():
                        ])
                 else:
                     if (len(wfMiddle_C) > 0):
-                        #jge - C is last
+                        #jge - C is last to have pulses
                         self.pi.wave_chain([
                            startRamp,        
                            255, 0,                       
                               middleWave_A,    
-                           255, 1, wfMiddle_A_Singles, wfMiddle_A_LoopCount, #loop x + y*256 times
+                           255, 1, wfMiddle_A_Singles, wfMiddle_A_LoopCount, 
                            255, 0,                       
                               middleWave_B,    
                            255, 1, wfMiddle_B_Singles, wfMiddle_B_LoopCount,          
@@ -325,34 +355,33 @@ class Unit():
                            ])                
                     else:
                         if (len(wfMiddle_B) > 0):
-                            #jge - B is last
+                            #jge - B is last to have pulses
                             self.pi.wave_chain([
                                startRamp,        
                                255, 0,                       
                                   middleWave_A,    
-                               255, 1, wfMiddle_A_Singles, wfMiddle_A_LoopCount, #loop x + y*256 times
+                               255, 1, wfMiddle_A_Singles, wfMiddle_A_LoopCount, 
                                255, 0,                       
                                   middleWave_B,    
                                255, 1, wfMiddle_B_Singles, wfMiddle_B_LoopCount,          
                                ])           
                         else:
                             if (len(wfMiddle_A) > 0):
-                                #jge - A is last
+                                #jge - A is last to have pulses
                                 self.pi.wave_chain([
                                    startRamp,        
                                    255, 0,                       
                                       middleWave_A,    
-                                   255, 1, wfMiddle_A_Singles, wfMiddle_A_LoopCount, #loop x + y*256 times
+                                   255, 1, wfMiddle_A_Singles, wfMiddle_A_LoopCount, 
                                    ])           
                             else:
                                 if (len(wfStart) > 0):
-                                    #jge - startRamp is last
+                                    #jge - startRamp is last to have pulses
                                     self.pi.wave_chain([
                                        startRamp,        
                                        ])           
-
             except Exception as e:
-                print(str(e))
+                self.pAL(str(e), 'error')
                         
             #jge - Get control of the situation.  No more phone calls                
             while self.pi.wave_tx_busy():
@@ -373,21 +402,20 @@ class Unit():
 
             if (self.haltAll != 1):
                 for i in range(len(allWaves)):
-                    print('deleting a wave -' + str(i) + '-')
+                    self.pAL('deleting a wave -' + str(i) + '-', 'info')
                     try:
                         self.pi.wave_delete(allWaves[i])
                     except Exception as e:
-                        print(str(e))
+                        self.pAL(str(e), 'error')
 
         self.sleepAll()
         self.goingToPreset = 0
         self.pi.wave_clear()
 
-        #jge - compare what the callback has counted with the prests
+        #jge - compare what the callback has counted with the presets
         for i, thisShade in enumerate(self.allShades):
-            print(self.allShades[i].name + ' shade is ' + str(self.allShades[i].motor.stepsFromHomeCount) + ' steps from home')
+            self.pAL(self.allShades[i].name + ' shade is ' + str(self.allShades[i].motor.stepsFromHomeCount) + ' steps from home', 'info')
         
-
     def buildMiddleWave(self, stepsAlreadyTaken, sortedShades):
         #jge - This method will build an array of pulses for the
         #jge - steady state portion of the movement.  It uses the
@@ -445,7 +473,7 @@ class Environment():
     def getSettings(self):
         #jge - this has to do with setting up keyboard input
         #jge - making this change is what goofs up the format
-        #jge - when making print statements.         
+        #jge - when making print statements to the console.         
         self.orig_settings = termios.tcgetattr(sys.stdin)
         tty.setraw(sys.stdin) 
 
@@ -478,7 +506,7 @@ class Shade():
         self.motor = motor
         self.name = name
         self.preset = []
-        print('Created ' + self.name)
+        self.parent.pAL('Created ' + self.name, 'info')
                 
 class HomeSwitch():
     #jge - object to manage the limit switches used to find home
@@ -487,14 +515,14 @@ class HomeSwitch():
         self.parentMotor = None
         self.switchPin = switchPin
         self.name = name
-        #self.homing = 0
         self.prevState = 0
         self.state = 0
         parent.pi.set_mode(switchPin, pigpio.INPUT)
         #jge - using internal resistors in addition to external
         parent.pi.set_pull_up_down(switchPin, pigpio.PUD_DOWN)
+        #jge - set up callback function to look for a closing switch
         self.cbf = parent.pi.callback(self.switchPin, pigpio.RISING_EDGE, self.callbackFunc)
-        print('Created ' + self.name)
+        self.parent.pAL('Created ' + self.name, 'info')
 
     def callbackFunc(self, gpio, level, tick):     
         #jge - no matter what, if the switch is closed, stop the motor.
@@ -502,36 +530,34 @@ class HomeSwitch():
         #jge - also, set the haltAll at the unit to call a stop to the
         #jge - wave_chain in the case of a preset.
         self.state = self.parent.pi.read(self.switchPin)
-        print('In homeswitch cbf - 1 - ' + self.name + ' state = ' + str(self.state) + ' prev state = ' + str(self.prevState))
+        self.parent.pAL('In homeswitch cbf - 1 - ' + self.name + ' state = ' + str(self.state) + ' prev state = ' + str(self.prevState), 'info')
 
         if (self.state == 1 and self.prevState != self.state):
-            print('in homeswitch cbf - 2 - ' + self.name + ' switch closed')
+            self.parent.pAL('in homeswitch cbf - 2 - ' + self.name + ' switch closed', 'info')
 
             if (self.parent.goingToPreset == 1):
                 #jge - the pi while loop in the goto preset method
                 #jge - will hear this setting of the flag and will
                 #jge - cancel the wave send.
              
-                print('in homeswitch cbf - 3 - ' + self.name + ' Interrupting a preset move because a switch has been closed')
+                self.parent.pAL('in homeswitch cbf - 3 - ' + self.name + ' Interrupting a preset move because a switch has been closed', 'info')
                 #jge - set a flag and wait for the gotoPreset to confirm that
                 #jge - the goto preset wave_chain has been canceled
                 self.parent.haltAll = 1
                 while (self.parent.goingToPreset == 1):
-                    print('in homeswitch cbf - 4 ' + self.name + ' - waiting for gotoPreset to be set to 0')
+                    self.parent.pAL('in homeswitch cbf - 4 ' + self.name + ' - waiting for gotoPreset to be set to 0', 'info')
                     time.sleep(0.1)
 
             #jge todo - need to home all the motors at this point
-            print('in homeswitch cbf - 5 ' + self.name + ' - about to call homing method')
+            self.parent.pAL('in homeswitch cbf - 5 ' + self.name + ' - about to call homing method', 'info')
             self.parentMotor.findHome('switch Called')
             
-            #self.homing = 1
-            #self.parentMotor.stop('limit')
-            print('In homeSwitch cbf - 6 ' + self.name + ' -  finished homing')  
-            #self.homing = 0
+            self.parent.pAL('In homeSwitch cbf - 6 ' + self.name + ' -  finished homing', 'info')  
+
             #jge - reset the checker
             self.state = self.parent.pi.read(self.switchPin)
             self.prevState = self.state
-            print('In homswitch cbf  - 7 ' + self.name + ' = self.state = ' + str(self.state))
+            self.parent.pAL('In homswitch cbf  - 7 ' + self.name + ' = self.state = ' + str(self.state), 'info')
             
             self.parent.haltAll = 0
 
@@ -557,7 +583,7 @@ class Motor():
         self.maxSteps = 1000000
         self.parent.pi.write(self.stepPin, 1)
         
-        print('Created ' + self.name)
+        self.parent.pAL('Created ' + self.name, 'info')
 
     def move(self, event, direction):        
         #jge - make sure it's not running against the wide open stops
@@ -573,10 +599,9 @@ class Motor():
             self.parent.pi.set_PWM_frequency(self.stepPin, 500)
             sleep(.05)
         else:
-            print('Cant open ' + self.name + ' any further')
+            self.parent.pAL('Cant open ' + self.name + ' any further', 'info')
         
     def callbackFunc(self, gpio, level, tick):     
-
         #jge - figure out whether to add or subtract the steps
         if (self.direction == self.coverDirection):
             self.stepsFromHomeCount += 1
@@ -588,23 +613,26 @@ class Motor():
             (self.stepsFromHomeCount >= self.maxSteps and self.direction == self.coverDirection) or
             (self.parent.haltAll == 1)
            ):
-            print('in Motor cbf - Stopping motor ' + self.name +
+            self.parent.pAL('in Motor cbf - Stopping motor ' + self.name +
                   ' haltAll = ' + str(self.parent.haltAll) +
                   ' stepsFromHome = ' + str(self.stepsFromHomeCount) +
                   ' dir = ' + str(self.direction) +
-                  ' cov dir = ' + str(self.coverDirection))       
+                  ' cov dir = ' + str(self.coverDirection), 'info')       
             self.stop(self)
+
+            if (self.stepsFromHomeCount == 0 and self.direction == self.uncoverDirection):
+                #jge - since it's at zero, may as well zero it
+                self.findHome(self)
 
     def stop(self, event):
         #jge - stop motion then sleep
-        self.parent.pi.wave_tx_stop()
         self.parent.pi.write(self.stepPin, 0)
         self.parent.pi.write(self.sleepPin, 0)
 
         self.sleep()
 
     def findHome(self, event):
-        print('in findhome method')
+        self.parent.pAL('in findhome method', 'info')
         movingOut = []    
         wid = 0
         cushion = []
@@ -651,28 +679,3 @@ class Motor():
         #jge - this restores power to the motor
         self.parent.pi.write(self.sleepPin, 1)
 
-'''
-log.  Why is one zero stopping all?
-deleting a wave -0-
-deleting a wave -1-
-deleting a wave -2-
-deleting a wave -3-
-deleting a wave -4-
-left shade shade is 6590 steps from home
-right shade shade is 6520 steps from home
-top shade shade is 1599 steps from home
-bot shade shade is 15565 steps from home
-Finished going to preset 4
-in Motor cbf - Stopping motor motor 2 haltAll = 0 stepsFromHome = 0 dir = 1 cov dir = 0
-deleting a wave -0-
-deleting a wave -1-
-deleting a wave -2-
-deleting a wave -3-
-deleting a wave -4-
-left shade shade is 4990 steps from home
-right shade shade is 4920 steps from home
-top shade shade is 0 steps from home
-bot shade shade is 13965 steps from home
-Finished going to preset 5
-
-'''
