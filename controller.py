@@ -19,8 +19,17 @@ class Unit():
         self.config.optionxform = str
         self.config.read(self.iniFileName)
         #jge - set up logging
-        if (str(self.config.get('config', 'logEvents')) == '1'):
-            self.logger = logging.getLogger('shadeLog')
+
+        #if (str(self.config.get('config', 'logEvents')) == '1'):
+        #self.logger = logging.getLogger('shadeLog.log')
+        #self.startLogging()
+
+        logging.basicConfig(level=logging.INFO, 
+                    filename='shade.log', # log to this file
+                    format='%(asctime)s %(message)s') # include timestamp
+        self.pAL('====================================================', 'info')
+        self.pAL('program started', 'info') 
+        self.pAL('====================================================', 'info')
 
         #jge - need a master flag to halt all when a limit switch is hit during a preset move
         self.haltAll = 0
@@ -83,15 +92,15 @@ class Unit():
         #jge - end Unit init
         #################################################################
     
-    def pAL(self, message, level):
+    def pAL(self, message, msgLevel):
         #jge - write to console
         print(message)
 
         #jge - write to log
-        if (level == 'error'):
-            self.logger.error(message)
-        elif (level == None):
-            self.logger.info(message)
+        if (msgLevel == 'error'):
+            logging.error(message)
+        elif (msgLevel == 'info'):
+            logging.info(message)
 
     def startLogging(self):  
         ch = logging.StreamHandler()
@@ -591,6 +600,7 @@ class Motor():
             (direction == self.uncoverDirection and self.stepsFromHomeCount > 0) or
             self.parent.stopAtWideOpen == '0'
             ):
+            self.parent.pAL('Moving ' + self.name + ' motor in direction ' + str(direction), 'info')
             self.direction = direction
             self.wakeUp()
             self.parent.pi.write(self.sleepPin, 1)
@@ -620,9 +630,9 @@ class Motor():
                   ' cov dir = ' + str(self.coverDirection), 'info')       
             self.stop(self)
 
-            if (self.stepsFromHomeCount == 0 and self.direction == self.uncoverDirection):
+            #if (self.stepsFromHomeCount == 0 and self.direction == self.uncoverDirection):
                 #jge - since it's at zero, may as well zero it
-                self.findHome(self)
+            #    self.findHome(self)
 
     def stop(self, event):
         #jge - stop motion then sleep
