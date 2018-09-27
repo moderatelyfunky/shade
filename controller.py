@@ -19,11 +19,6 @@ class Unit():
         self.config.optionxform = str
         self.config.read(self.iniFileName)
         #jge - set up logging
-
-        #if (str(self.config.get('config', 'logEvents')) == '1'):
-        #self.logger = logging.getLogger('shadeLog.log')
-        #self.startLogging()
-
         logging.basicConfig(level=logging.INFO, 
                     filename='shade.log', # log to this file
                     format='%(asctime)s %(message)s') # include timestamp
@@ -102,22 +97,6 @@ class Unit():
         elif (msgLevel == 'info'):
             logging.info(message)
 
-    def startLogging(self):  
-        ch = logging.StreamHandler()
-        ch.setLevel(logging.DEBUG)
-
-        # create formatter
-        formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-
-        # add formatter to ch
-        ch.setFormatter(formatter)
-
-        # add ch to logger
-        self.logger.addHandler(ch)
-
-        self.pAL('Program startup', 'info')
-        #jge - there are more advanced, built in logging features like auto next day
-
     def wakeUpAll(self):
         for i, thisShade in enumerate(self.allShades):
             self.allShades[i].motor.wakeUp()
@@ -139,6 +118,12 @@ class Unit():
             self.pAL('Stopping ' + thisShade.name, 'info')           
             self.pAL(self.allShades[i].name + ' steps from home = ' + str(self.allShades[i].motor.stepsFromHomeCount), 'info')
             thisShade.motor.stop('stopAll')
+
+    def homeAll(self):
+        for i, thisShade in enumerate(self.allShades):
+            self.pAL('Homing ' + thisShade.name, 'info')           
+            self.pAL(self.allShades[i].name + ' steps from home = ' + str(self.allShades[i].motor.stepsFromHomeCount), 'info')
+            thisShade.motor.findHome('homeAll')
 
     def cleanup(self):
         self.environment.restoreSettings()
@@ -403,23 +388,33 @@ class Unit():
                     self.stopAll()
                     #jge - set the flag to indicate to the switch that it's
                     #jge - okay to proceed with homing
-                    self.goingToPreset = 0
+                    #jge - 9/27 - this is being done at the bottom anyway - self.goingToPreset = 0
 
                 time.sleep(0.1)
                 
             pigpio.exceptions = True
 
-            if (self.haltAll != 1):
-                for i in range(len(allWaves)):
-                    self.pAL('deleting a wave -' + str(i) + '-', 'info')
-                    try:
-                        self.pi.wave_delete(allWaves[i])
-                    except Exception as e:
-                        self.pAL(str(e), 'error')
+            #jge - 9/27 - removing the check for haltAll.
+            #if (self.haltAll != 1):
+            for i in range(len(allWaves)):
+                self.pAL('deleting a wave -' + str(i) + '-', 'info')
+                try:
+                    self.pi.wave_delete(allWaves[i])
+                except Exception as e:
+                    self.pAL(str(e), 'error')
 
         self.sleepAll()
         self.goingToPreset = 0
         self.pi.wave_clear()
+
+        #jge - 9/27 - new homeall attempt
+        if (self.haltAll == 1):
+            #jge - by now, all motors should be stopped and ready 
+    
+            #jge 9/27 - moving this here from the homeswtich callback
+            self.haltAll = 0
+            self.homeAll()
+        
 
         #jge - compare what the callback has counted with the presets
         for i, thisShade in enumerate(self.allShades):
@@ -542,6 +537,7 @@ class HomeSwitch():
         self.parent.pAL('In homeswitch cbf - 1 - ' + self.name + ' state = ' + str(self.state) + ' prev state = ' + str(self.prevState), 'info')
 
         if (self.state == 1 and self.prevState != self.state):
+            #jge - the switch is newly closed
             self.parent.pAL('in homeswitch cbf - 2 - ' + self.name + ' switch closed', 'info')
 
             if (self.parent.goingToPreset == 1):
@@ -556,19 +552,21 @@ class HomeSwitch():
                 while (self.parent.goingToPreset == 1):
                     self.parent.pAL('in homeswitch cbf - 4 ' + self.name + ' - waiting for gotoPreset to be set to 0', 'info')
                     time.sleep(0.1)
-
-            #jge todo - need to home all the motors at this point
-            self.parent.pAL('in homeswitch cbf - 5 ' + self.name + ' - about to call homing method', 'info')
-            self.parentMotor.findHome('switch Called')
-            
-            self.parent.pAL('In homeSwitch cbf - 6 ' + self.name + ' -  finished homing', 'info')  
+            else:
+                #jge - only call the homing if not going to preset.
+                #jge - otherwise, let the gotoPreset method handle
+                #jge - the timing of the call to home all
+                self.parent.pAL('in homeswitch cbf - 5 ' + self.name + ' - about to call homing method', 'info')
+                self.parentMotor.findHome('switch Called') 
+                self.parent.pAL('In homeSwitch cbf - 6 ' + self.name + ' -  finished homing', 'info')  
 
             #jge - reset the checker
             self.state = self.parent.pi.read(self.switchPin)
             self.prevState = self.state
             self.parent.pAL('In homswitch cbf  - 7 ' + self.name + ' = self.state = ' + str(self.state), 'info')
             
-            self.parent.haltAll = 0
+            #jge - moving this to end of the the gotopreset
+            #self.parent.haltAll = 0
 
 class Motor():
     def __init__(self, parent, sleepPin = 0, dirPin = 0, stepPin = 0, direction = 0, name = '', coverDirection = 0, uncoverDirection = 0, homeSwitch = 0):
