@@ -386,6 +386,7 @@ class Unit():
                 if (self.haltAll == 1):
                     self.pi.wave_tx_stop()
                     self.stopAll()
+                    print('In gotoPreset - just halted all')
                     #jge - set the flag to indicate to the switch that it's
                     #jge - okay to proceed with homing
                     #jge - 9/27 - this is being done at the bottom anyway - self.goingToPreset = 0
@@ -397,7 +398,7 @@ class Unit():
             #jge - 9/27 - removing the check for haltAll.
             #if (self.haltAll != 1):
             for i in range(len(allWaves)):
-                self.pAL('deleting a wave -' + str(i) + '-', 'info')
+                self.pAL('In gototPreset - deleting a wave : ' + str(i) + '-', 'info')
                 try:
                     self.pi.wave_delete(allWaves[i])
                 except Exception as e:
@@ -410,12 +411,11 @@ class Unit():
         #jge - 9/27 - new homeall attempt
         if (self.haltAll == 1):
             #jge - by now, all motors should be stopped and ready 
-    
+            print('in gotoPreset - haltAll = 1, now going to home all')
             #jge 9/27 - moving this here from the homeswtich callback
             self.haltAll = 0
             self.homeAll()
-        
-
+    
         #jge - compare what the callback has counted with the presets
         for i, thisShade in enumerate(self.allShades):
             self.pAL(self.allShades[i].name + ' shade is ' + str(self.allShades[i].motor.stepsFromHomeCount) + ' steps from home', 'info')
@@ -549,9 +549,9 @@ class HomeSwitch():
                 #jge - set a flag and wait for the gotoPreset to confirm that
                 #jge - the goto preset wave_chain has been canceled
                 self.parent.haltAll = 1
-                while (self.parent.goingToPreset == 1):
-                    self.parent.pAL('in homeswitch cbf - 4 ' + self.name + ' - waiting for gotoPreset to be set to 0', 'info')
-                    time.sleep(0.1)
+                #while (self.parent.goingToPreset == 1):
+                #    self.parent.pAL('in homeswitch cbf - 4 ' + self.name + ' - waiting for gotoPreset to be set to 0', 'info')
+                #    time.sleep(0.1)
             else:
                 #jge - only call the homing if not going to preset.
                 #jge - otherwise, let the gotoPreset method handle
