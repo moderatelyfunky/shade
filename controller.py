@@ -123,7 +123,7 @@ class Unit():
         for i, thisShade in enumerate(self.allShades):
             self.pAL('Homing ' + thisShade.name, 'info')           
             self.pAL(self.allShades[i].name + ' steps from home = ' + str(self.allShades[i].motor.stepsFromHomeCount), 'info')
-            thisShade.motor.findHome('homeAll')
+            thisShade.motor.faultFindHome('homeAll')
 
     def cleanup(self):
         self.environment.restoreSettings()
@@ -637,6 +637,32 @@ class Motor():
         self.parent.pi.write(self.sleepPin, 0)
 
         self.sleep()
+    
+    def faultFindHome(self, event):
+        self.parent.pAL('in faultFindHome method', 'info')
+        movingIn = []  
+        wid = 0
+
+        #jge - make sure the motor is awake
+        self.wakeUp()
+
+        #jge - in the case of a preset interruption, the 
+        #jge - switch may not be closed
+        if (self.parent.pi.read(self.homeSwitch.switchPin) == 0):
+            #jge - move toward switch
+            self.parent.pi.write(self.dirPin, self.uncoverDirection)
+            movingIn.append(pigpio.pulse(1<<self.stepPin, 0, 1100))
+            movingIn.append(pigpio.pulse(0, 1<<self.stepPin, 1100))
+                
+            self.parent.pi.wave_add_generic(movingIn)
+            wid = self.parent.pi.wave_create()
+            self.parent.pi.wave_send_once(wid)
+            while self.parent.pi.wave_tx_busy():
+                time.sleep(0.1)
+
+            self.stop('faultFindHome')
+            #self.parent.pi.wave_clear()
+            self.parent.pi.wave_delete(wid)        
 
     def findHome(self, event):
         self.parent.pAL('in findhome method', 'info')
@@ -660,7 +686,7 @@ class Motor():
             self.parent.pi.wave_send_once(wid)
             while self.parent.pi.wave_tx_busy():
                 time.sleep(0.1)       
-                
+            
         #jge - add some number of steps to completely clear the switch 
         x = 1
         while (x < cushionStepCount):
@@ -678,7 +704,8 @@ class Motor():
         self.stepsFromHomeCount = 0
         
         self.stop('limit')
-        self.parent.pi.wave_clear()
+        #self.parent.pi.wave_clear()
+        self.parent.pi.wave_delete(wid)
         
     def sleep(self):
         #jge - this turns off motor voltage
