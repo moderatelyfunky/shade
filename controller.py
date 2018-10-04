@@ -386,7 +386,7 @@ class Unit():
                 if (self.haltAll == 1):
                     self.pi.wave_tx_stop()
                     self.stopAll()
-                    print('In gotoPreset - just halted all')
+                    #print('In gotoPreset - just halted all')
                     #jge - set the flag to indicate to the switch that it's
                     #jge - okay to proceed with homing
                     #jge - 9/27 - this is being done at the bottom anyway - self.goingToPreset = 0
@@ -398,7 +398,7 @@ class Unit():
             #jge - 9/27 - removing the check for haltAll.
             #if (self.haltAll != 1):
             for i in range(len(allWaves)):
-                self.pAL('In gototPreset - deleting a wave : ' + str(i) + '-', 'info')
+                #self.pAL('In gototPreset - deleting a wave : ' + str(i) + '-', 'info')
                 try:
                     self.pi.wave_delete(allWaves[i])
                 except Exception as e:
@@ -417,8 +417,8 @@ class Unit():
             self.homeAll()
     
         #jge - compare what the callback has counted with the presets
-        for i, thisShade in enumerate(self.allShades):
-            self.pAL(self.allShades[i].name + ' shade is ' + str(self.allShades[i].motor.stepsFromHomeCount) + ' steps from home', 'info')
+        #for i, thisShade in enumerate(self.allShades):
+        #    self.pAL(self.allShades[i].name + ' shade is ' + str(self.allShades[i].motor.stepsFromHomeCount) + ' steps from home', 'info')
         
     def buildMiddleWave(self, stepsAlreadyTaken, sortedShades):
         #jge - This method will build an array of pulses for the
@@ -534,18 +534,18 @@ class HomeSwitch():
         #jge - also, set the haltAll at the unit to call a stop to the
         #jge - wave_chain in the case of a preset.
         self.state = self.parent.pi.read(self.switchPin)
-        self.parent.pAL('In homeswitch cbf - 1 - ' + self.name + ' state = ' + str(self.state) + ' prev state = ' + str(self.prevState), 'info')
+        #self.parent.pAL('In homeswitch cbf - 1 - ' + self.name + ' state = ' + str(self.state) + ' prev state = ' + str(self.prevState), 'info')
 
         if (self.state == 1 and self.prevState != self.state):
             #jge - the switch is newly closed
-            self.parent.pAL('in homeswitch cbf - 2 - ' + self.name + ' switch closed', 'info')
+            #self.parent.pAL('in homeswitch cbf - 2 - ' + self.name + ' switch closed', 'info')
 
             if (self.parent.goingToPreset == 1):
                 #jge - the pi while loop in the goto preset method
                 #jge - will hear this setting of the flag and will
                 #jge - cancel the wave send.
              
-                self.parent.pAL('in homeswitch cbf - 3 - ' + self.name + ' Interrupting a preset move because a switch has been closed', 'info')
+                #self.parent.pAL('in homeswitch cbf - 3 - ' + self.name + ' Interrupting a preset move because a switch has been closed', 'info')
                 #jge - set a flag and wait for the gotoPreset to confirm that
                 #jge - the goto preset wave_chain has been canceled
                 self.parent.haltAll = 1
@@ -618,8 +618,7 @@ class Motor():
 
         #jge - stop the move if it's wide open or closed
         if ((self.stepsFromHomeCount == 0 and self.direction == self.uncoverDirection) or
-            (self.stepsFromHomeCount >= self.maxSteps and self.direction == self.coverDirection) or
-            (self.parent.haltAll == 1)
+            (self.stepsFromHomeCount >= self.maxSteps and self.direction == self.coverDirection)
            ):
             self.parent.pAL('in Motor cbf - Stopping motor ' + self.name +
                   ' haltAll = ' + str(self.parent.haltAll) +
@@ -646,6 +645,8 @@ class Motor():
         cushion = []
         cushionStepCount = 10
 
+        #jge - make sure the motor is awake
+        self.wakeUp()
         #jge - set the direction pin
         self.parent.pi.write(self.dirPin, self.coverDirection)
 
@@ -658,7 +659,7 @@ class Motor():
             wid = self.parent.pi.wave_create()
             self.parent.pi.wave_send_once(wid)
             while self.parent.pi.wave_tx_busy():
-                time.sleep(0.1)
+                time.sleep(0.1)       
                 
         #jge - add some number of steps to completely clear the switch 
         x = 1
