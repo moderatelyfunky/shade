@@ -540,6 +540,10 @@ class HomeSwitch():
             #jge - the switch is newly closed
             #self.parent.pAL('in homeswitch cbf - 2 - ' + self.name + ' switch closed', 'info')
 
+            #jge - reset the checker
+            self.state = self.parent.pi.read(self.switchPin)
+            self.prevState = self.state
+            
             if (self.parent.goingToPreset == 1):
                 #jge - the pi while loop in the goto preset method
                 #jge - will hear this setting of the flag and will
@@ -559,11 +563,6 @@ class HomeSwitch():
                 self.parent.pAL('in homeswitch cbf - 5 ' + self.name + ' - about to call homing method', 'info')
                 self.parentMotor.findHome('switch Called') 
                 self.parent.pAL('In homeSwitch cbf - 6 ' + self.name + ' -  finished homing', 'info')  
-
-            #jge - reset the checker
-            self.state = self.parent.pi.read(self.switchPin)
-            self.prevState = self.state
-            self.parent.pAL('In homswitch cbf  - 7 ' + self.name + ' = self.state = ' + str(self.state), 'info')
             
             #jge - moving this to end of the the gotopreset
             #self.parent.haltAll = 0
@@ -648,21 +647,21 @@ class Motor():
 
         #jge - in the case of a preset interruption, the 
         #jge - switch may not be closed
-        if (self.parent.pi.read(self.homeSwitch.switchPin) == 0):
-            #jge - move toward switch
-            self.parent.pi.write(self.dirPin, self.uncoverDirection)
-            movingIn.append(pigpio.pulse(1<<self.stepPin, 0, 1100))
-            movingIn.append(pigpio.pulse(0, 1<<self.stepPin, 1100))
-                
+        self.parent.pi.write(self.dirPin, self.uncoverDirection)
+        movingIn.append(pigpio.pulse(1<<self.stepPin, 0, 1100))
+        movingIn.append(pigpio.pulse(0, 1<<self.stepPin, 1100))        
+
+        while (self.parent.pi.read(self.homeSwitch.switchPin) == 0):
+            #jge - move toward switch              
             self.parent.pi.wave_add_generic(movingIn)
             wid = self.parent.pi.wave_create()
             self.parent.pi.wave_send_once(wid)
             while self.parent.pi.wave_tx_busy():
                 time.sleep(0.1)
 
-            self.stop('faultFindHome')
-            #self.parent.pi.wave_clear()
-            self.parent.pi.wave_delete(wid)        
+        self.stop('faultFind')
+        self.parent.pi.wave_delete(wid)        
+        #self.parent.pi.wave_clear()
 
     def findHome(self, event):
         self.parent.pAL('in findhome method', 'info')
