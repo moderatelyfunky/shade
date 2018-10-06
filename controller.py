@@ -171,6 +171,7 @@ class Unit():
                 self.allShades[i].motor.stepsToDest = self.allShades[i].motor.stepsFromHomeCount - theDestination 
             
     def gotoPreset(self, event, presetNo):
+        self.pAL('Going to preset', 'info')
         ################################
         #jge - preset init
         self.goingToPreset = 1
@@ -534,23 +535,25 @@ class HomeSwitch():
         #jge - take care of zeroing in the motor stop method
         #jge - also, set the haltAll at the unit to call a stop to the
         #jge - wave_chain in the case of a preset.
+        #jge - sleep for debouncing
+        #sleep(0.005)
         self.state = self.parent.pi.read(self.switchPin)
-        self.parent.pAL('In homeswitch cbf - 1 - ' + self.name + ' state = ' + str(self.state) + ' prev state = ' + str(self.prevState), 'info')
+        #self.parent.pAL('In homeswitch cbf - 1 - ' + self.name + ' state = ' + str(self.state) + ' prev state = ' + str(self.prevState), 'info')
 
         if (self.state == 1 and self.prevState != self.state):
             #jge - the switch is newly closed
             #self.parent.pAL('in homeswitch cbf - 2 - ' + self.name + ' switch closed', 'info')
 
             #jge - reset the checker
-            self.state = self.parent.pi.read(self.switchPin)
-            self.prevState = self.state
+            #self.state = self.parent.pi.read(self.switchPin)
+            #self.prevState = self.state
             
             if (self.parent.goingToPreset == 1):
                 #jge - the pi while loop in the goto preset method
                 #jge - will hear this setting of the flag and will
                 #jge - cancel the wave send.
              
-                #self.parent.pAL('in homeswitch cbf - 3 - ' + self.name + ' Interrupting a preset move because a switch has been closed', 'info')
+                self.parent.pAL('in homeswitch cbf - 3 - ' + self.name + ' Interrupting a preset move because a switch has been closed', 'info')
                 #jge - set a flag and wait for the gotoPreset to confirm that
                 #jge - the goto preset wave_chain has been canceled
                 self.parent.haltAll = 1
@@ -565,11 +568,11 @@ class HomeSwitch():
                 self.parentMotor.findHome('switch Called') 
                 self.parent.pAL('In homeSwitch cbf - 6 ' + self.name + ' -  finished homing', 'info')  
 
-            #jge - when this is only in the if-else, the switches
-            #jge - sometimes report as closed the second time when
-            #jge - homing.
-            self.state = self.parent.pi.read(self.switchPin)
-            self.prevState = self.state
+        #jge - when this is only in the if-else, the switches
+        #jge - sometimes report as closed the second time when
+        #jge - homing.
+        #self.state = self.parent.pi.read(self.switchPin)
+        self.prevState = self.state
 
             #jge - moving this to end of the the gotopreset
             #self.parent.haltAll = 0
