@@ -534,7 +534,7 @@ class HomeSwitch():
         #jge - also, set the haltAll at the unit to call a stop to the
         #jge - wave_chain in the case of a preset.
         self.state = self.parent.pi.read(self.switchPin)
-        #self.parent.pAL('In homeswitch cbf - 1 - ' + self.name + ' state = ' + str(self.state) + ' prev state = ' + str(self.prevState), 'info')
+        self.parent.pAL('In homeswitch cbf - 1 - ' + self.name + ' state = ' + str(self.state) + ' prev state = ' + str(self.prevState), 'info')
 
         if (self.state == 1 and self.prevState != self.state):
             #jge - the switch is newly closed
@@ -563,7 +563,13 @@ class HomeSwitch():
                 self.parent.pAL('in homeswitch cbf - 5 ' + self.name + ' - about to call homing method', 'info')
                 self.parentMotor.findHome('switch Called') 
                 self.parent.pAL('In homeSwitch cbf - 6 ' + self.name + ' -  finished homing', 'info')  
-            
+
+            #jge - when this is only in the if-else, the switches
+            #jge - sometimes report as closed the second time when
+            #jge - homing.
+            self.state = self.parent.pi.read(self.switchPin)
+            self.prevState = self.state
+
             #jge - moving this to end of the the gotopreset
             #self.parent.haltAll = 0
 
@@ -639,6 +645,8 @@ class Motor():
     
     def faultFindHome(self, event):
         self.parent.pAL('in faultFindHome method', 'info')
+        self.move('faultFind', self.uncoverDirection)
+        '''
         movingIn = []  
         wid = 0
 
@@ -655,14 +663,20 @@ class Motor():
             #jge - move toward switch              
             self.parent.pi.wave_add_generic(movingIn)
             wid = self.parent.pi.wave_create()
+            print('Wid = ' + str(wid))
             self.parent.pi.wave_send_once(wid)
             while self.parent.pi.wave_tx_busy():
                 time.sleep(0.1)
 
         self.stop('faultFind')
-        self.parent.pi.wave_delete(wid)        
-        #self.parent.pi.wave_clear()
 
+        try:
+            self.parent.pi.wave_delete(wid)        
+        except Exception as e:
+            self.pAL(str(e), 'error')        
+        finally:
+            self.parent.pi.wave_clear()
+        '''
     def findHome(self, event):
         self.parent.pAL('in findhome method', 'info')
         movingOut = []    
