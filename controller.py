@@ -124,6 +124,7 @@ class Unit():
             self.pAL('Homing ' + thisShade.name, 'info')           
             self.pAL(self.allShades[i].name + ' steps from home = ' + str(self.allShades[i].motor.stepsFromHomeCount), 'info')
             thisShade.motor.faultFindHome('homeAll')
+        self.haltAll = 0
 
     def cleanup(self):
         self.environment.restoreSettings()
@@ -413,7 +414,7 @@ class Unit():
             #jge - by now, all motors should be stopped and ready 
             print('in gotoPreset - haltAll = 1, now going to home all')
             #jge 9/27 - moving this here from the homeswtich callback
-            self.haltAll = 0
+            #self.haltAll = 0
             self.homeAll()
     
         #jge - compare what the callback has counted with the presets
@@ -599,9 +600,12 @@ class Motor():
 
     def move(self, event, direction):        
         #jge - make sure it's not running against the wide open stops
+        #jge - allow for a move when homing all due to a switch closed
+        #jge - during a gotoPreset
         if ((direction == self.coverDirection and self.maxSteps > self.stepsFromHomeCount) or
             (direction == self.uncoverDirection and self.stepsFromHomeCount > 0) or
-            self.parent.stopAtWideOpen == '0'
+            self.parent.stopAtWideOpen == '0' or
+            self.parent.haltAll == 1
             ):
             self.parent.pAL('Moving ' + self.name + ' motor in direction ' + str(direction), 'info')
             self.direction = direction
@@ -645,38 +649,13 @@ class Motor():
     
     def faultFindHome(self, event):
         self.parent.pAL('in faultFindHome method', 'info')
-        self.move('faultFind', self.uncoverDirection)
-        '''
-        movingIn = []  
-        wid = 0
 
-        #jge - make sure the motor is awake
-        self.wakeUp()
+        #jge - if the switch is closed, move away otherwise move in
+        if (self.parent.pi.read(self.homeSwitch.switchPin) == 1):
+            self.findHome('faultFind')
+        else:
+            self.move('faultFind', self.uncoverDirection)
 
-        #jge - in the case of a preset interruption, the 
-        #jge - switch may not be closed
-        self.parent.pi.write(self.dirPin, self.uncoverDirection)
-        movingIn.append(pigpio.pulse(1<<self.stepPin, 0, 1100))
-        movingIn.append(pigpio.pulse(0, 1<<self.stepPin, 1100))        
-
-        while (self.parent.pi.read(self.homeSwitch.switchPin) == 0):
-            #jge - move toward switch              
-            self.parent.pi.wave_add_generic(movingIn)
-            wid = self.parent.pi.wave_create()
-            print('Wid = ' + str(wid))
-            self.parent.pi.wave_send_once(wid)
-            while self.parent.pi.wave_tx_busy():
-                time.sleep(0.1)
-
-        self.stop('faultFind')
-
-        try:
-            self.parent.pi.wave_delete(wid)        
-        except Exception as e:
-            self.pAL(str(e), 'error')        
-        finally:
-            self.parent.pi.wave_clear()
-        '''
     def findHome(self, event):
         self.parent.pAL('in findhome method', 'info')
         movingOut = []    

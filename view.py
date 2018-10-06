@@ -3,6 +3,76 @@ import time
 import middle
 import threading as th
 
+class DrawingPoint():
+    def __init__(self):
+        self.x = 0
+        self.y = 0
+
+
+class DrawingCanvas():
+    def __init__(self, drawing_enabled, touchScreen):
+        self.drawing_enabled = drawing_enabled
+        self.the_points = []
+        #jge - color choices - http://www.science.smith.edu/dftwiki/index.php/Color_Charts_for_TKinter
+        self.the_canvas = tk.Canvas(
+            touchScreen.gui.app, 
+            width=195, 
+            height=419, 
+            borderwidth=1, 
+            highlightbackground="black", 
+            highlightthickness=1, 
+            bg="deepskyblue3"
+        )
+        self.the_canvas.grid(row=1, column=0, rowspan=5, ipadx=3, ipady=3)
+        self.the_canvas.bind('<ButtonPress-1>', lambda event: self.enable_drawing())
+        self.the_canvas.bind('<Motion>', lambda event: self.start_drawing(event))
+        self.the_canvas.bind('<ButtonRelease-1>', lambda event: self.disable_drawing())
+
+    def enable_drawing(self):
+        self.drawing_enabled = True
+        self.the_points.clear()
+
+    def disable_drawing(self):
+        self.drawing_enabled = False
+        leftmost_x = 359
+        leftmost_y = 0
+        rightmost_x = 0
+        rightmost_y = 0
+        topmost_x = 0
+        topmost_y = 430
+        bottommost_x = 0
+        bottommost_y = 0
+
+        for p in self.the_points:
+            print("(" + str(p.x) + ", " + str(p.y) + ")")
+            if p.x > rightmost_x:
+                rightmost_x = p.x
+                rightmost_y = p.y
+            if p.x < leftmost_x:
+                leftmost_x = p.x
+                leftmost_y = p.y
+            if p.y < topmost_y:
+                topmost_x = p.x
+                topmost_y = p.y
+            if p.y > bottommost_y:
+                bottommost_x = p.x
+                bottommost_y = p.y
+
+        print("Rightmost point = (" + str(rightmost_x) + ", " + str(rightmost_y) + ")")
+        print("Leftmost point = (" + str(leftmost_x) + ", " + str(leftmost_y) + ")")
+        print("Topmost point = (" + str(topmost_x) + ", " + str(topmost_y) + ")")
+        print("Bottommost point = (" + str(bottommost_x) + ", " + str(bottommost_y) + ")")
+
+        #id = self.the_canvas.create_oval(leftmost_x, topmost_y, rightmost_x, bottommost_y)
+
+    def start_drawing(self, event):
+        if self.drawing_enabled:
+            # print(event.x, event.y)
+            self.the_canvas.create_rectangle((event.x, event.y) * 2)
+            current_point = DrawingPoint()
+            current_point.x = event.x
+            current_point.y = event.y
+            self.the_points.append(current_point)
 
 class Rect():
     # (start_x, start_y) --> upper left corner
@@ -21,7 +91,7 @@ class Rect():
         self.end_x = end_x
         self.end_y = end_y
         self.id = id
-        self.canvasDraw = tk.Canvas(self.touchScreen.gui.app, width=195, height=419, borderwidth=1)
+        self.canvasDraw = tk.Canvas(self.touchScreen.gui.app, width=195, height=419, borderwidth=1, highlightbackground="black", highlightthickness=1)
         self.canvasDraw.grid(row=1, column=1, rowspan=5, ipadx=3, ipady=3)
         self.canvasDraw.bind('<ButtonPress-1>', lambda event: self.getStartCoords(event))
         self.canvasDraw.bind('<ButtonRelease-1>', lambda event: self.getEndCoords(event))  
@@ -52,8 +122,8 @@ class Rect():
 class FreeHandContainer():
     def __init__(self, touchScreen):
         self.touchScreen = touchScreen
-        self.freehandArea = Rect(touchScreen, 0, 0, 0, 0, 0)  
-
+        #self.freehandArea = Rect(touchScreen, 0, 0, 0, 0, 0)  
+        self.freehandArea = DrawingCanvas(False, touchScreen)
 
 class ButtonTimer():
     timerOn = False
@@ -271,7 +341,6 @@ class Gui():
         self.app.grid_rowconfigure(6, weight=1)
         self.app.grid_columnconfigure(0, weight=1)
         self.app.grid_columnconfigure(8, weight=1)
-
 
 class TouchScreen():
     def __init__(self):
