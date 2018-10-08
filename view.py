@@ -8,19 +8,18 @@ class DrawingPoint():
         self.x = 0
         self.y = 0
 
-
 class DrawingCanvas():
     def __init__(self, drawing_enabled, touchScreen):
         self.drawing_enabled = drawing_enabled
         self.the_points = []
+
         #jge - color choices - http://www.science.smith.edu/dftwiki/index.php/Color_Charts_for_TKinter
         self.the_canvas = tk.Canvas(
             touchScreen.gui.app, 
             width=195, 
             height=419, 
             borderwidth=1, 
-            highlightbackground="black", 
-            highlightthickness=1, 
+
             bg="deepskyblue3"
         )
         self.the_canvas.grid(row=1, column=0, rowspan=5, ipadx=3, ipady=3)
@@ -31,6 +30,7 @@ class DrawingCanvas():
     def enable_drawing(self):
         self.drawing_enabled = True
         self.the_points.clear()
+        self.the_canvas.delete("all")
 
     def disable_drawing(self):
         self.drawing_enabled = False
@@ -44,7 +44,7 @@ class DrawingCanvas():
         bottommost_y = 0
 
         for p in self.the_points:
-            print("(" + str(p.x) + ", " + str(p.y) + ")")
+            #print("(" + str(p.x) + ", " + str(p.y) + ")")
             if p.x > rightmost_x:
                 rightmost_x = p.x
                 rightmost_y = p.y
@@ -58,12 +58,36 @@ class DrawingCanvas():
                 bottommost_x = p.x
                 bottommost_y = p.y
 
-        print("Rightmost point = (" + str(rightmost_x) + ", " + str(rightmost_y) + ")")
-        print("Leftmost point = (" + str(leftmost_x) + ", " + str(leftmost_y) + ")")
-        print("Topmost point = (" + str(topmost_x) + ", " + str(topmost_y) + ")")
-        print("Bottommost point = (" + str(bottommost_x) + ", " + str(bottommost_y) + ")")
+        #print("Rightmost point = (" + str(rightmost_x) + ", " + str(rightmost_y) + ")")
+        #print("Leftmost point = (" + str(leftmost_x) + ", " + str(leftmost_y) + ")")
+        #print("Topmost point = (" + str(topmost_x) + ", " + str(topmost_y) + ")")
+        #print("Bottommost point = (" + str(bottommost_x) + ", " + str(bottommost_y) + ")")
+        #print("Duuu - the canvas is " + str(self.the_canvas.winfo_width()) + ' pixels high')
+        #print("dddddduuuu - the canvas is " + str(self.the_canvas.winfo_height()) + ' pixels wide')
 
-        #id = self.the_canvas.create_oval(leftmost_x, topmost_y, rightmost_x, bottommost_y)
+        #jge - now get percentage to cover.
+        #jge - swap x and y because of portrait orientation 
+        leftShadePct = topmost_y / self.the_canvas.winfo_height()
+        rightShadePct = (self.the_canvas.winfo_height() - bottommost_y) / self.the_canvas.winfo_height()
+        topShadePct =  (self.the_canvas.winfo_width() - rightmost_x) / self.the_canvas.winfo_width()
+        botShadePct = leftmost_x / self.the_canvas.winfo_width()
+
+        if (leftShadePct < 0):
+            leftShadePct = 0
+        if (rightShadePct < 0):
+            rightShadePct = 0
+        if (topShadePct < 0):
+            topShadePct = 0
+        if (botShadePct < 0):
+            botShadePct = 0
+
+        self.the_canvas.delete("all")
+        ovalId = self.the_canvas.create_oval(leftmost_x, topmost_y, rightmost_x, bottommost_y)
+
+        print('duuuu the left shade should cover ' + str(leftShadePct) + ' starting from the left') 
+        print('duuuu the right shade should cover ' + str(rightShadePct) + ' starting from the right') 
+        print('duuu the top shade should cover ' + str(topShadePct) + ' starting from the top')
+        print('duuu the bot shade should cover ' + str(botShadePct) + ' starting from the bottom')
 
     def start_drawing(self, event):
         if self.drawing_enabled:
@@ -179,17 +203,17 @@ class PresetButton(tk.Button):
                 # jge - flash to indicate successful save, but failing miserably at making it happen
                 # abj - making it happen with 5 separate threads
                 # there's probably a better way
-                t = th.Timer(0.5, lambda: event.widget.configure(image=self.touchScreen.images.smallButtonGreen))
+                t = th.Timer(0.25, lambda: event.widget.configure(image=self.touchScreen.images.smallButtonGreen))
                 t.start()
-                t1 = th.Timer(1.5, lambda: event.widget.configure(image=self.touchScreen.images.smallRoundButton))
+                t1 = th.Timer(.5, lambda: event.widget.configure(image=self.touchScreen.images.smallRoundButton))
                 t1.start()
-                t2 = th.Timer(2.5, lambda: event.widget.configure(image=self.touchScreen.images.smallButtonGreen))
+                t2 = th.Timer(.75, lambda: event.widget.configure(image=self.touchScreen.images.smallButtonGreen))
                 t2.start()
-                t3 = th.Timer(3.5, lambda: event.widget.configure(image=self.touchScreen.images.smallRoundButton))
+                t3 = th.Timer(1, lambda: event.widget.configure(image=self.touchScreen.images.smallRoundButton))
                 t3.start()
-                t4 = th.Timer(4.5, lambda: event.widget.configure(image=self.touchScreen.images.smallButtonGreen))
+                t4 = th.Timer(1.25, lambda: event.widget.configure(image=self.touchScreen.images.smallButtonGreen))
                 t4.start()
-                t5 = th.Timer(5.5, lambda: event.widget.configure(image=self.touchScreen.images.smallRoundButton))
+                t5 = th.Timer(1.5, lambda: event.widget.configure(image=self.touchScreen.images.smallRoundButton))
                 t5.start()
 
             else:
@@ -210,47 +234,56 @@ class PresetButtonContainer():
 
 
 class ManualButton(tk.Button):
-    def __init__(self, touchScreen, shade, direction, image, *args, **kwargs):
+    def __init__(self, touchScreen, shade, direction, offImage, onImage, *args, **kwargs):
         tk.Button.__init__(self, *args, **kwargs)
 
         self.touchScreen = touchScreen
         self.shade = shade
         self.direction = direction
+        self.onImage = onImage
+        self.offImage = offImage
 
         # jge - properties common to all manual buttons
-        self.configure(image=image, borderwidth=0)
+        self.configure(image=self.offImage, borderwidth=0)
         self.grid(ipadx=3, ipady=3)
 
-        self.bind('<ButtonRelease-1>', lambda event: mid.stop(event, self.shade))
-        self.bind('<ButtonPress-1>', lambda event: mid.move(event, self.shade, self.direction))
+        self.bind('<ButtonPress-1>', lambda event: self.btnPress(event))
+        self.bind('<ButtonRelease-1>', lambda event: self.btnRelease(event))
 
+    def btnPress(self, event):
+        event.widget.configure(image=self.onImage)
+        mid.move(event, self.shade, self.direction)
+
+    def btnRelease(self, event):
+        event.widget.configure(image=self.offImage)
+        mid.stop(event, self.shade)        
 
 class ManualButtonContainer():
     def __init__(self, touchScreen):
         self.touchScreen = touchScreen 
 
-        self.btnTopShadeUp = ManualButton(self.touchScreen, 'top', 1, self.touchScreen.images.arrowRight)
+        self.btnTopShadeUp = ManualButton(self.touchScreen, 'top', 1, self.touchScreen.images.arrowRight, self.touchScreen.images.arrowRightGreen)
         self.btnTopShadeUp.grid(row=3, column=7)
 
-        self.btnTopShadeDown = ManualButton(self.touchScreen, 'top', 0, self.touchScreen.images.arrowLeft)
+        self.btnTopShadeDown = ManualButton(self.touchScreen, 'top', 0, self.touchScreen.images.arrowLeft, self.touchScreen.images.arrowLeftGreen)
         self.btnTopShadeDown.grid(row=3, column=6)
 
-        self.btnLeftShadeLeft = ManualButton(self.touchScreen, 'left', 1, self.touchScreen.images.arrowUp)
+        self.btnLeftShadeLeft = ManualButton(self.touchScreen, 'left', 1, self.touchScreen.images.arrowUp, self.touchScreen.images.arrowUpGreen)
         self.btnLeftShadeLeft.grid(row=1, column=5)
 
-        self.btnLeftShadeRight = ManualButton(self.touchScreen, 'left', 0, self.touchScreen.images.arrowDown)
+        self.btnLeftShadeRight = ManualButton(self.touchScreen, 'left', 0, self.touchScreen.images.arrowDown, self.touchScreen.images.arrowDownGreen)
         self.btnLeftShadeRight.grid(row=2, column=5)
 
-        self.btnRightShadeLeft = ManualButton(self.touchScreen, 'right', 0, self.touchScreen.images.arrowUp)
+        self.btnRightShadeLeft = ManualButton(self.touchScreen, 'right', 0, self.touchScreen.images.arrowUp, self.touchScreen.images.arrowUpGreen)
         self.btnRightShadeLeft.grid(row=4, column=5)
 
-        self.btnRightShadeRight = ManualButton(self.touchScreen, 'right', 1, self.touchScreen.images.arrowDown)
+        self.btnRightShadeRight = ManualButton(self.touchScreen, 'right', 1, self.touchScreen.images.arrowDown, self.touchScreen.images.arrowDownGreen)
         self.btnRightShadeRight.grid(row=5, column=5)
 
-        self.btnBottomShadeUp = ManualButton(self.touchScreen, 'bot', 1, self.touchScreen.images.arrowRight)
+        self.btnBottomShadeUp = ManualButton(self.touchScreen, 'bot', 1, self.touchScreen.images.arrowRight, self.touchScreen.images.arrowRightGreen)
         self.btnBottomShadeUp.grid(row=3, column=4)
 
-        self.btnBottomShadeDown = ManualButton(self.touchScreen, 'bot', 0, self.touchScreen.images.arrowLeft)
+        self.btnBottomShadeDown = ManualButton(self.touchScreen, 'bot', 0, self.touchScreen.images.arrowLeft, self.touchScreen.images.arrowLeftGreen)
         self.btnBottomShadeDown.grid(row=3, column=3)
 
 
