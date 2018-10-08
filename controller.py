@@ -533,8 +533,7 @@ class HomeSwitch():
                 #jge - only call the homing if not going to preset.
                 #jge - otherwise, let the gotoPreset method handle
                 #jge - the timing of the call to home all
-                if (self.parentMotor.homing == 0):
-                    self.parentMotor.findHome('switch Called') 
+                self.parentMotor.findHome('switch Called') 
 
         self.prevState = self.state
 
@@ -559,8 +558,7 @@ class Motor():
         #jge - for now set it so it doesn't interfere
         self.maxSteps = 1000000
         self.parent.pi.write(self.stepPin, 1)
-        self.homing = 0
-
+        
         self.parent.pAL('Created ' + self.name, 'info')
 
     def move(self, event, direction):        
@@ -591,17 +589,19 @@ class Motor():
             self.stepsFromHomeCount -= 1
 
         #jge - stop the move if it's wide open or closed
-        if (self.stepsFromHomeCount >= self.maxSteps and self.direction == self.coverDirection):
-            self.parent.pAL('in Motor cbf - Max steps reached - stopping motor ' + self.name +
+        if ((self.stepsFromHomeCount == 0 and self.direction == self.uncoverDirection) or
+            (self.stepsFromHomeCount >= self.maxSteps and self.direction == self.coverDirection)
+           ):
+            self.parent.pAL('in Motor cbf - Stopping motor ' + self.name +
                   ' haltAll = ' + str(self.parent.haltAll) +
                   ' stepsFromHome = ' + str(self.stepsFromHomeCount) +
                   ' dir = ' + str(self.direction) +
                   ' cov dir = ' + str(self.coverDirection), 'info')       
             self.stop(self)
 
-        if (self.stepsFromHomeCount == 0 and self.direction == self.uncoverDirection):
-            #jge - since it's at zero, may as well zero it
-            self.findHome(self)
+            #if (self.stepsFromHomeCount == 0 and self.direction == self.uncoverDirection):
+                #jge - since it's at zero, may as well zero it
+            #    self.findHome(self)
 
     def stop(self, event):
         #jge - stop motion then sleep
@@ -621,8 +621,6 @@ class Motor():
 
     def findHome(self, event):
         self.parent.pAL('in findhome method', 'info')
-        self.homing = 1
-        moveToSwitch = []
         movingOut = []    
         wid = 0
         cushion = []
@@ -630,27 +628,8 @@ class Motor():
 
         #jge - make sure the motor is awake
         self.wakeUp()
-
-        #jge - need to handle two scenarios.  1 - when being
-        #jge - initiated from a motor.move when stopAtWideOpen = 0
-        #jge - 2 - when being initiated from a zero steps left 
-        if (self.parent.pi.read(self.homeSwitch.switchPin) == 1):
-            #jge - set the direction pin to move away from switch
-            self.parent.pi.write(self.dirPin, self.coverDirection)
-        else:
-            #jge - set the direction pin to move toward the swtich
-            self.parent.pi.write(self.dirPin, self.uncoverDirection)
-
-            #jge - build a generic single pulse
-            moveToSwitch.append(pigpio.pulse(1<<self.stepPin, 0, 1100))
-            moveToSwitch.append(pigpio.pulse(0, 1<<self.stepPin, 1100))
-
-            while (self.parent.pi.read(self.homeSwitch.switchPin) == 0):
-                self.parent.pi.wave_add_generic(moveToSwitch)
-                wid = self.parent.pi.wave_create()
-                self.parent.pi.wave_send_once(wid)
-                while self.parent.pi.wave_tx_busy():
-                    time.sleep(0.1)             
+        #jge - set the direction pin
+        self.parent.pi.write(self.dirPin, self.coverDirection)
 
         #jge - build a generic single pulse
         movingOut.append(pigpio.pulse(1<<self.stepPin, 0, 1100))
@@ -682,7 +661,6 @@ class Motor():
         self.stop('limit')
         #self.parent.pi.wave_clear()
         self.parent.pi.wave_delete(wid)
-        self.homing = 0
         
     def sleep(self):
         #jge - this turns off motor voltage
@@ -691,4 +669,3 @@ class Motor():
     def wakeUp(self):
         #jge - this restores power to the motor
         self.parent.pi.write(self.sleepPin, 1)
-
