@@ -35,6 +35,7 @@ class Unit():
         self.stopAtWideOpen = self.config.get('config', 'stopAtWideOpen')
 
         self.pi = pigpio.pi() # Connect to pigpiod daemon
+        pigpio.exceptions = True
         if not self.pi.connected:
            exit(0)
 
@@ -189,7 +190,9 @@ class Unit():
         for i, thisShade in enumerate(tempSortedShades):
             #jge - forget about shades who may already be in position
             if (tempSortedShades[i].motor.stepsToDest != 0):
+                print('193 - ' + tempSortedShades[i].name + ' stepsToDest = ' + str(tempSortedShades[i].motor.stepsToDest))
                 sortedShades.append(tempSortedShades[i])
+        print('194 - len(sortedShades) = ' + str(len(sortedShades)))
                       
         #jge - build the starting ramp of the wave.  Only add the pins
         #jge - for the shades that still have steps to move.  The bitmask 
@@ -219,15 +222,26 @@ class Unit():
             else:
                 #jge - all steps have been accounted for
                 break
-
+        print('225 - len(wfStart) = ' + str(len(wfStart)))
         stepsAlreadyTaken = pulseCount
+        print('227 - len(sortedShades) = ' + str(len(sortedShades)))
 
+        tempSortedShades.clear()
         #jge - remove any shades who may have no more steps left
         for i, thisShade in enumerate(sortedShades):
+            print('229 - this sortedShade = ' + sortedShades[i].name)
             if (sortedShades[i].motor.stepsToDest <= stepsAlreadyTaken):
+                print('230 - removing ' + sortedShades[i].name)
+                print('231- this sorted shades stepsToDest = ' + str(sortedShades[i].motor.stepsToDest))
+                print('232 - steps already taken = ' + str(stepsAlreadyTaken))
                 sortedShades[i].motor.stepsToDest = 0
-                sortedShades.remove(sortedShades[i])
-                
+                #maybe now sortedShades.remove(sortedShades[i])
+            else:
+                tempSortedShades.append(sortedShades[i])
+
+        sortedShades.clear()
+        sortedShades = tempSortedShades
+                                              
         #jge - Build a wave that has the steady state pulses for all
         #jge - until the shade with the least steps is at its goal.
         #jge - Then remove that shade from the array and build for
@@ -254,31 +268,34 @@ class Unit():
         middleWave_D = 0
         wfMiddle_D_Singles = 0
         wfMiddle_D_LoopCount = 0
-        
+
         #jge - it's possible that the ramp used up all the steps
+        print('260 - len(sortedShades = ' + str(len(sortedShades)))
         if (len(sortedShades) > 0):
             wfMiddle_A, wfMiddle_A_LoopCount, wfMiddle_A_Singles = self.buildMiddleWave(stepsAlreadyTaken, sortedShades)    
             sortedShades.remove(sortedShades[0])
             stepsAlreadyTaken += (wfMiddle_A_LoopCount * 256) + wfMiddle_A_Singles
+            print('264 - len(wfMiddle_A) = ' + str(len(wfMiddle_A)))
+            print('265 - len(sortedShades) = ' + str(len(sortedShades)))
+            if (len(sortedShades) > 0):
+                wfMiddle_B, wfMiddle_B_LoopCount, wfMiddle_B_Singles = self.buildMiddleWave(stepsAlreadyTaken, sortedShades)    
+                sortedShades.remove(sortedShades[0])
+                stepsAlreadyTaken += (wfMiddle_B_LoopCount * 256) + wfMiddle_B_Singles
 
-        if (len(sortedShades) > 0):
-            wfMiddle_B, wfMiddle_B_LoopCount, wfMiddle_B_Singles = self.buildMiddleWave(stepsAlreadyTaken, sortedShades)    
-            sortedShades.remove(sortedShades[0])
-            stepsAlreadyTaken += (wfMiddle_B_LoopCount * 256) + wfMiddle_B_Singles
+                if (len(sortedShades) > 0):
+                    wfMiddle_C, wfMiddle_C_LoopCount, wfMiddle_C_Singles = self.buildMiddleWave(stepsAlreadyTaken, sortedShades)    
+                    sortedShades.remove(sortedShades[0])
+                    stepsAlreadyTaken += (wfMiddle_C_LoopCount * 256) + wfMiddle_C_Singles
 
-        if (len(sortedShades) > 0):
-            wfMiddle_C, wfMiddle_C_LoopCount, wfMiddle_C_Singles = self.buildMiddleWave(stepsAlreadyTaken, sortedShades)    
-            sortedShades.remove(sortedShades[0])
-            stepsAlreadyTaken += (wfMiddle_C_LoopCount * 256) + wfMiddle_C_Singles
-
-        if (len(sortedShades) > 0):
-            wfMiddle_D, wfMiddle_D_LoopCount, wfMiddle_D_Singles = self.buildMiddleWave(stepsAlreadyTaken, sortedShades)    
-            sortedShades.remove(sortedShades[0])
-            stepsAlreadyTaken += (wfMiddle_D_LoopCount * 256) + wfMiddle_D_Singles
+                    if (len(sortedShades) > 0):
+                        wfMiddle_D, wfMiddle_D_LoopCount, wfMiddle_D_Singles = self.buildMiddleWave(stepsAlreadyTaken, sortedShades)    
+                        sortedShades.remove(sortedShades[0])
+                        stepsAlreadyTaken += (wfMiddle_D_LoopCount * 256) + wfMiddle_D_Singles
 
         #jge - Use Wave_add_generic to "convert" the arrays of pulses
         #jge - into waves that will be fed to pigpio with the wave_chain
         #jge - method
+
         self.pi.wave_add_generic(wfStart)
         
         #jge - Build an array of the waves to make clean up easier
@@ -290,32 +307,38 @@ class Unit():
             allWaves.append(startRamp)
 
             if (len(wfMiddle_A) > 0):
+                print('---wfMiddle_A len = ' + str(len(wfMiddle_A)))
                 self.pi.wave_add_generic(wfMiddle_A)
                 middleWave_A = self.pi.wave_create()
+
                 allWaves.append(middleWave_A)
-            
-            if (len(wfMiddle_B) > 0):
-                self.pi.wave_add_generic(wfMiddle_B)
-                middleWave_B = self.pi.wave_create()
-                allWaves.append(middleWave_B)
+                
+                if (len(wfMiddle_B) > 0):
+                    print('---wfMiddle_B len = ' + str(len(wfMiddle_B)))
+                    self.pi.wave_add_generic(wfMiddle_B)
+                    middleWave_B = self.pi.wave_create()
+                    allWaves.append(middleWave_B)
 
-            if (len(wfMiddle_C) > 0):
-                self.pi.wave_add_generic(wfMiddle_C)
-                middleWave_C = self.pi.wave_create()
-                allWaves.append(middleWave_C)
+                    if (len(wfMiddle_C) > 0):
+                        print('---wfMiddle_C len = ' + str(len(wfMiddle_C)))
+                        self.pi.wave_add_generic(wfMiddle_C)
+                        middleWave_C = self.pi.wave_create()
+                        allWaves.append(middleWave_C)
 
-            if (len(wfMiddle_D) > 0):
-                self.pi.wave_add_generic(wfMiddle_D)
-                middleWave_D = self.pi.wave_create()
-                allWaves.append(middleWave_D)                
+                        if (len(wfMiddle_D) > 0):
+                            print('---wfMiddle_D len = ' + str(len(wfMiddle_D)))                
+                            self.pi.wave_add_generic(wfMiddle_D)
+                            middleWave_D = self.pi.wave_create()
+                            allWaves.append(middleWave_D)                
 
             #jge - this is the method that pushes the waves to the motors
             #jge - the blocks that start with 255 are loops.  The closing
             #jge - part of the loop tells pigpio how many times to loop
             #jge - each wave and how many single iterations of it after that
-
             try:
+                
                 if (len(wfMiddle_D) > 0):
+                    print('wfMiddle_D len = ' + str(len(wfMiddle_D)))
                     #jge - all elements have length
                     self.pi.wave_chain([
                        startRamp,        
@@ -334,6 +357,7 @@ class Unit():
                        ])
                 else:
                     if (len(wfMiddle_C) > 0):
+                        print('wfMiddle_C len = ' + str(len(wfMiddle_C)))
                         #jge - C is last to have pulses
                         self.pi.wave_chain([
                            startRamp,        
@@ -349,6 +373,18 @@ class Unit():
                            ])                
                     else:
                         if (len(wfMiddle_B) > 0):
+                            print('wfMiddle_A len = ' + str(len(wfMiddle_A)))                            
+                            #print('*** wfMiddle_A first element = ' + str(wfMiddle_A[0]))
+                            #print('*** wfMiddle_A second element = ' + str(wfMiddle_A[1]))
+                            #print('*** wfMMiddle_A_Singles = ' + str(wfMiddle_A_Singles))
+                            #print('*** wfMMiddle_A_LoopCount = ' + str(wfMiddle_A_LoopCount))
+                            
+                            print('wfMiddle_B len = ' + str(len(wfMiddle_B)))                            
+                            print('*** wfMiddle_B first element = ' + str(wfMiddle_B[0]))
+                            print('*** wfMiddle_B second element = ' + str(wfMiddle_B[1]))
+                            print('*** wfMMiddle_B_Singles = ' + str(wfMiddle_B_Singles))
+                            print('*** wfMMiddle_B_LoopCount = ' + str(wfMiddle_B_LoopCount))
+                            
                             #jge - B is last to have pulses
                             self.pi.wave_chain([
                                startRamp,        
@@ -361,6 +397,7 @@ class Unit():
                                ])           
                         else:
                             if (len(wfMiddle_A) > 0):
+                                print('wfMiddle_A len = ' + str(len(wfMiddle_A)))                                
                                 #jge - A is last to have pulses
                                 self.pi.wave_chain([
                                    startRamp,        
@@ -370,13 +407,17 @@ class Unit():
                                    ])           
                             else:
                                 if (len(wfStart) > 0):
+                                    print('wfStart len = ' + str(len(wfStart)))                                    
                                     #jge - startRamp is last to have pulses
                                     self.pi.wave_chain([
                                        startRamp,        
                                        ])           
             except Exception as e:
-                self.pAL(str(e), 'error')
-                        
+                self.pAL('in gotoPreset - trying wave chain - ' + str(e), 'error')
+                exception_type, exception_obj, exception_tb = sys.exc_info()
+                fname = exception_tb.tb_frame.f_code.co_filename
+                print(exception_type, fname, exception_tb.tb_lineno)
+                
             #jge - Get control of the situation.  No more phone calls                
             while self.pi.wave_tx_busy():
                 #jge - check for a stop message that a limit switch may
@@ -396,11 +437,19 @@ class Unit():
                 try:
                     self.pi.wave_delete(allWaves[i])
                 except Exception as e:
-                    self.pAL(str(e), 'error')
-
+                    self.pAL('in gotoPreset deleting waves - ' + str(e), 'error')
+           # self.pi.wave_clear()
+           #sleep(.05)
+           
+        sortedShades.clear()
+        wfStart.clear()
+        wfMiddle_A.clear()
+        wfMiddle_B.clear()
+        wfMiddle_C.clear()
+        wfMiddle_D.clear()
+        
         self.sleepAll()
         self.goingToPreset = 0
-        self.pi.wave_clear()
 
         if (self.haltAll == 1):
             #jge - by now, all motors should be stopped and ready 
@@ -416,6 +465,9 @@ class Unit():
         #jge - is because pigpio has a limit of 256 iterations for
         #jge - each wave.  Anything over that means another loop or
         #jge - just the remainder if it's less than 256
+
+        #jge - there are many times when this returns arrays with length of two.
+        #jge - need to fix
         
         minDelay = self.environment.minDelay
         wfMiddle = []
@@ -558,7 +610,7 @@ class Motor():
         #jge - for now set it so it doesn't interfere
         self.maxSteps = 1000000
         self.parent.pi.write(self.stepPin, 1)
-        
+
         self.parent.pAL('Created ' + self.name, 'info')
 
     def move(self, event, direction):        
@@ -607,7 +659,6 @@ class Motor():
         #jge - stop motion then sleep
         self.parent.pi.write(self.stepPin, 0)
         self.parent.pi.write(self.sleepPin, 0)
-
         self.sleep()
     
     def faultFindHome(self, event):
@@ -620,7 +671,8 @@ class Motor():
             self.move('faultFind', self.uncoverDirection)
 
     def findHome(self, event):
-        self.parent.pAL('in findhome method', 'info')
+        self.parent.pAL('in findhome method for ' + self.name, 'info')
+        moveToSwitch = []
         movingOut = []    
         wid = 0
         cushion = []
@@ -630,6 +682,31 @@ class Motor():
         self.wakeUp()
         #jge - set the direction pin
         self.parent.pi.write(self.dirPin, self.coverDirection)
+        
+        #jge - need to handle two scenarios.  1 - when being
+        #jge - initiated from a motor.move when stopAtWideOpen = 0
+        #jge - 2 - when being initiated from a zero steps left 
+        
+        #if (self.moverInvoked == 1):
+            #jge - set the direction pin to move away from switch
+        self.parent.pi.write(self.dirPin, self.coverDirection)
+
+        '''
+        else:
+            #jge - set the direction pin to move toward the swtich
+            self.parent.pi.write(self.dirPin, self.uncoverDirection)
+
+            #jge - build a generic single pulse
+            moveToSwitch.append(pigpio.pulse(1<<self.stepPin, 0, 1100))
+            moveToSwitch.append(pigpio.pulse(0, 1<<self.stepPin, 1100))
+
+            while (self.parent.pi.read(self.homeSwitch.switchPin) == 0):
+                self.parent.pi.wave_add_generic(moveToSwitch)
+                wid = self.parent.pi.wave_create()
+                self.parent.pi.wave_send_once(wid)
+                while self.parent.pi.wave_tx_busy():
+                    time.sleep(0.1)             
+        '''
 
         #jge - build a generic single pulse
         movingOut.append(pigpio.pulse(1<<self.stepPin, 0, 1100))
@@ -654,14 +731,18 @@ class Motor():
         self.parent.pi.wave_send_once(wid)
         while self.parent.pi.wave_tx_busy():
             time.sleep(0.1)
+        
+        self.stop('limit')
+        
+        try:
+            self.parent.pi.wave_delete(wid)
+        except Exception as e:
+                self.parent.pAL(str(e), 'error')
+                self.parent.pi.wave_clear()
 
         #jge - now that off of switch and cushioned, set to 0
         self.stepsFromHomeCount = 0
-        
-        self.stop('limit')
-        #self.parent.pi.wave_clear()
-        self.parent.pi.wave_delete(wid)
-        
+                
     def sleep(self):
         #jge - this turns off motor voltage
         self.parent.pi.write(self.sleepPin, 0)
