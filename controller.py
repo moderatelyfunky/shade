@@ -160,6 +160,8 @@ class Unit():
             #jge - set the direction pin of each motor object also
             #jge - write to the gpio pin to set the direction and 
             #jge - set stepsToDest which is used in the wave creation.  
+            print('66666666666 - thisShade = ' + self.allShades[i].name + ' - theDestination = ' + str(theDestination) + ' steps fromhomecount = ' + str(self.allShades[i].motor.stepsFromHomeCount))                 
+
             if (theDestination > self.allShades[i].motor.stepsFromHomeCount):
                 self.allShades[i].motor.direction = self.allShades[i].motor.coverDirection
                 self.pi.write(self.allShades[i].motor.dirPin, self.allShades[i].motor.coverDirection)
@@ -310,26 +312,25 @@ class Unit():
                 print('---wfMiddle_A len = ' + str(len(wfMiddle_A)))
                 self.pi.wave_add_generic(wfMiddle_A)
                 middleWave_A = self.pi.wave_create()
-
                 allWaves.append(middleWave_A)
                 
-                if (len(wfMiddle_B) > 0):
-                    print('---wfMiddle_B len = ' + str(len(wfMiddle_B)))
-                    self.pi.wave_add_generic(wfMiddle_B)
-                    middleWave_B = self.pi.wave_create()
-                    allWaves.append(middleWave_B)
+            if (len(wfMiddle_B) > 0):
+                print('---wfMiddle_B len = ' + str(len(wfMiddle_B)))
+                self.pi.wave_add_generic(wfMiddle_B)
+                middleWave_B = self.pi.wave_create()
+                allWaves.append(middleWave_B)
 
-                    if (len(wfMiddle_C) > 0):
-                        print('---wfMiddle_C len = ' + str(len(wfMiddle_C)))
-                        self.pi.wave_add_generic(wfMiddle_C)
-                        middleWave_C = self.pi.wave_create()
-                        allWaves.append(middleWave_C)
+            if (len(wfMiddle_C) > 0):
+                print('---wfMiddle_C len = ' + str(len(wfMiddle_C)))
+                self.pi.wave_add_generic(wfMiddle_C)
+                middleWave_C = self.pi.wave_create()
+                allWaves.append(middleWave_C)
 
-                        if (len(wfMiddle_D) > 0):
-                            print('---wfMiddle_D len = ' + str(len(wfMiddle_D)))                
-                            self.pi.wave_add_generic(wfMiddle_D)
-                            middleWave_D = self.pi.wave_create()
-                            allWaves.append(middleWave_D)                
+            if (len(wfMiddle_D) > 0):
+                print('---wfMiddle_D len = ' + str(len(wfMiddle_D)))                
+                self.pi.wave_add_generic(wfMiddle_D)
+                middleWave_D = self.pi.wave_create()
+                allWaves.append(middleWave_D)                
 
             #jge - this is the method that pushes the waves to the motors
             #jge - the blocks that start with 255 are loops.  The closing
@@ -373,17 +374,12 @@ class Unit():
                            ])                
                     else:
                         if (len(wfMiddle_B) > 0):
-                            print('wfMiddle_A len = ' + str(len(wfMiddle_A)))                            
-                            #print('*** wfMiddle_A first element = ' + str(wfMiddle_A[0]))
-                            #print('*** wfMiddle_A second element = ' + str(wfMiddle_A[1]))
-                            #print('*** wfMMiddle_A_Singles = ' + str(wfMiddle_A_Singles))
-                            #print('*** wfMMiddle_A_LoopCount = ' + str(wfMiddle_A_LoopCount))
-                            
-                            print('wfMiddle_B len = ' + str(len(wfMiddle_B)))                            
-                            print('*** wfMiddle_B first element = ' + str(wfMiddle_B[0]))
-                            print('*** wfMiddle_B second element = ' + str(wfMiddle_B[1]))
-                            print('*** wfMMiddle_B_Singles = ' + str(wfMiddle_B_Singles))
-                            print('*** wfMMiddle_B_LoopCount = ' + str(wfMiddle_B_LoopCount))
+                            #print('wfMiddle_A len = ' + str(len(wfMiddle_A)))                                                      
+                            #print('wfMiddle_B len = ' + str(len(wfMiddle_B)))                            
+                            #print('*** wfMiddle_B first element = ' + str(wfMiddle_B[0]))
+                            #print('*** wfMiddle_B second element = ' + str(wfMiddle_B[1]))
+                            #print('*** wfMMiddle_B_Singles = ' + str(wfMiddle_B_Singles))
+                            #print('*** wfMMiddle_B_LoopCount = ' + str(wfMiddle_B_LoopCount))
                             
                             #jge - B is last to have pulses
                             self.pi.wave_chain([
@@ -441,12 +437,12 @@ class Unit():
            # self.pi.wave_clear()
            #sleep(.05)
            
-        sortedShades.clear()
-        wfStart.clear()
-        wfMiddle_A.clear()
-        wfMiddle_B.clear()
-        wfMiddle_C.clear()
-        wfMiddle_D.clear()
+        #sortedShades.clear()
+        #wfStart.clear()
+        #wfMiddle_A.clear()
+        #wfMiddle_B.clear()
+        #wfMiddle_C.clear()
+        #wfMiddle_D.clear()
         
         self.sleepAll()
         self.goingToPreset = 0
@@ -638,8 +634,8 @@ class Motor():
         if (self.direction == self.coverDirection):
             self.stepsFromHomeCount += 1
         else:
-            self.stepsFromHomeCount -= 1
-
+            self.stepsFromHomeCount -= 1                
+            
         #jge - stop the move if it's wide open or closed
         if ((self.stepsFromHomeCount == 0 and self.direction == self.uncoverDirection) or
             (self.stepsFromHomeCount >= self.maxSteps and self.direction == self.coverDirection)
@@ -654,7 +650,16 @@ class Motor():
             #if (self.stepsFromHomeCount == 0 and self.direction == self.uncoverDirection):
                 #jge - since it's at zero, may as well zero it
             #    self.findHome(self)
+            
+        #jge - the findhome method wreaks havoc on this method
+        #jge - the wave is finished before the motor is, so need
+        #jge - to account for situations where it has driven the
+        #jge - count below zero
+        if (self.stepsFromHomeCount < 0):
+            self.stepsFromHomeCount = 0
 
+        #print('55555555555555 - self.direction = ' + str(self.direction) + ' still writing stepsFromHome - ' + str(self.stepsFromHomeCount))
+            
     def stop(self, event):
         #jge - stop motion then sleep
         self.parent.pi.write(self.stepPin, 0)
@@ -671,6 +676,7 @@ class Motor():
             self.move('faultFind', self.uncoverDirection)
 
     def findHome(self, event):
+        print('77777777777777 stepsfromhomecount = ' + str(self.stepsFromHomeCount))
         self.parent.pAL('in findhome method for ' + self.name, 'info')
         moveToSwitch = []
         movingOut = []    
@@ -689,7 +695,7 @@ class Motor():
         
         #if (self.moverInvoked == 1):
             #jge - set the direction pin to move away from switch
-        self.parent.pi.write(self.dirPin, self.coverDirection)
+        #self.parent.pi.write(self.dirPin, self.coverDirection)
 
         '''
         else:
@@ -742,7 +748,10 @@ class Motor():
 
         #jge - now that off of switch and cushioned, set to 0
         self.stepsFromHomeCount = 0
-                
+        #print('8888888888888888888 just set stepsfromhomeCount = 0')
+        #print('888888888888888888 stepsfromhomecount = ' + str(self.stepsFromHomeCount))
+        #print('88888888888888888 stepsToDest = ' + str(self.stepsToDest))
+        
     def sleep(self):
         #jge - this turns off motor voltage
         self.parent.pi.write(self.sleepPin, 0)
