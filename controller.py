@@ -122,8 +122,9 @@ class Unit():
 
     def homeAll(self):
         for i, thisShade in enumerate(self.allShades):
-            self.pAL('Homing ' + thisShade.name, 'info')           
-            thisShade.motor.faultFindHome('homeAll')
+            self.pAL('Homing ' + thisShade.name, 'info')
+            thisShade.motor.isHoming = 1
+            thisShade.motor.moveToSwitch('homeAll')
 
     def cleanup(self):
         self.environment.restoreSettings()
@@ -571,6 +572,7 @@ class HomeSwitch():
 
         if (self.state == 1 and self.prevState != self.state):
             #jge - the switch is newly closed
+            self.parentMotor.isHoming = 0
             
             if (self.parent.goingToPreset == 1):
                 #jge - the pi while loop in the goto preset method
@@ -581,7 +583,7 @@ class HomeSwitch():
                 #jge - only call the homing if not going to preset.
                 #jge - otherwise, let the gotoPreset method handle
                 #jge - the timing of the call to home all
-                self.parentMotor.findHome('switch Called') 
+                self.parentMotor.moveOffSwitch('switch Called') 
 
         self.prevState = self.state
 
@@ -606,6 +608,7 @@ class Motor():
         #jge - for now set it so it doesn't interfere
         self.maxSteps = 1000000
         self.parent.pi.write(self.stepPin, 1)
+        self.isHoming = 0
 
         self.parent.pAL('Created ' + self.name, 'info')
 
@@ -616,7 +619,8 @@ class Motor():
         if ((direction == self.coverDirection and self.maxSteps > self.stepsFromHomeCount) or
             (direction == self.uncoverDirection and self.stepsFromHomeCount > 0) or
             self.parent.stopAtWideOpen == '0' or
-            self.parent.haltAll == 1
+            self.parent.haltAll == 1 or
+            self.isHoming == 1
             ):
             self.parent.pAL('Moving ' + self.name + ' motor in direction ' + str(direction), 'info')
             self.direction = direction
@@ -637,8 +641,12 @@ class Motor():
             self.stepsFromHomeCount -= 1                
             
         #jge - stop the move if it's wide open or closed
-        if ((self.stepsFromHomeCount == 0 and self.direction == self.uncoverDirection) or
-            (self.stepsFromHomeCount >= self.maxSteps and self.direction == self.coverDirection)
+        if (
+            (
+                (self.stepsFromHomeCount == 0 and self.direction == self.uncoverDirection) or
+                (self.stepsFromHomeCount >= self.maxSteps and self.direction == self.coverDirection)
+            ) and
+            self.isHoming == False
            ):
             self.parent.pAL('in Motor cbf - Stopping motor ' + self.name +
                   ' haltAll = ' + str(self.parent.haltAll) +
@@ -649,9 +657,9 @@ class Motor():
 
             #if (self.stepsFromHomeCount == 0 and self.direction == self.uncoverDirection):
                 #jge - since it's at zero, may as well zero it
-            #    self.findHome(self)
+            #    self.moveOffSwitch(self)
             
-        #jge - the findhome method wreaks havoc on this method
+        #jge - the moveOffSwitch method wreaks havoc on this method
         #jge - the wave is finished before the motor is, so need
         #jge - to account for situations where it has driven the
         #jge - count below zero
@@ -666,18 +674,18 @@ class Motor():
         self.parent.pi.write(self.sleepPin, 0)
         self.sleep()
     
-    def faultFindHome(self, event):
-        self.parent.pAL('in faultFindHome method', 'info')
+    def moveToSwitch(self, event):
+        self.parent.pAL('in moveToSwitch method', 'info')
 
         #jge - if the switch is closed, move away otherwise move in
         if (self.parent.pi.read(self.homeSwitch.switchPin) == 1):
-            self.findHome('faultFind')
+            self.moveOffSwitch('faultFind')
         else:
             self.move('faultFind', self.uncoverDirection)
 
-    def findHome(self, event):
+    def moveOffSwitch(self, event):
         print('77777777777777 stepsfromhomecount = ' + str(self.stepsFromHomeCount))
-        self.parent.pAL('in findhome method for ' + self.name, 'info')
+        self.parent.pAL('in moveOffSwitch method for ' + self.name, 'info')
         moveToSwitch = []
         movingOut = []    
         wid = 0
