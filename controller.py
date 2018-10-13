@@ -453,6 +453,10 @@ class Unit():
             #jge - by now, all motors should be stopped and ready 
             self.homeAll()
             self.haltAll = 0
+
+        if (presetNo == 5):
+            #jge - it's the wide open preset, so home all
+            self.homeAll()
             
     def buildMiddleWave(self, stepsAlreadyTaken, sortedShades):
         #jge - This method will build an array of pulses for the
