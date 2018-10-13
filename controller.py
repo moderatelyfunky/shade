@@ -8,6 +8,7 @@ import operator #jge - used to find max array value and member
 import termios
 import tty
 import logging
+import math
 
 class Unit():
     #jge - this is the main point of entry for control from the gui
@@ -33,6 +34,10 @@ class Unit():
         #jge - until the homing is working, allow the manual
         #jge - buttons to move what they think is zero
         self.stopAtWideOpen = self.config.get('config', 'stopAtWideOpen')
+        
+        #jge - get dimensions for freehand work
+        self.widthInSteps = self.config.get('config', 'widthInSteps')
+        self.heightInSteps = self.config.get('config', 'heightInSteps')
 
         self.pi = pigpio.pi() # Connect to pigpiod daemon
         pigpio.exceptions = True
@@ -47,6 +52,8 @@ class Unit():
         #jge - 4th argument = name
         #jge - 5th argument = Cover direction - so can compare when +- steps
         #jge - 6th argument = Uncover direction
+        #jge - 7th argument = related homeSwitch
+        #jge - 8th argument = lag time for simulatenous homing issues
         #jge - HomeSwitch constructors.  1st arg - gpio
         ##########################################################
         self.leftHomeSwitch = HomeSwitch(self, 16, 'left home switch')
@@ -152,7 +159,8 @@ class Unit():
         shade.preset.append(int(self.config.get('presets', shade.name + ' 3')))
         shade.preset.append(int(self.config.get('presets', shade.name + ' 4')))
         shade.preset.append(int(self.config.get('presets', shade.name + ' open full')))
-        shade.preset.append(int(self.config.get('presets', shade.name + ' closed center')))        
+        shade.preset.append(int(self.config.get('presets', shade.name + ' closed center')))
+        shade.preset.appent(0, shade.name + ' freehand')      
 
     def getPresetPositions(self, presetNo):
         #jge - Use the preset number to retrieve the positions for each 
@@ -162,8 +170,6 @@ class Unit():
             #jge - set the direction pin of each motor object also
             #jge - write to the gpio pin to set the direction and 
             #jge - set stepsToDest which is used in the wave creation.  
-            print('66666666666 - thisShade = ' + self.allShades[i].name + ' - theDestination = ' + str(theDestination) + ' steps fromhomecount = ' + str(self.allShades[i].motor.stepsFromHomeCount))                 
-
             if (theDestination > self.allShades[i].motor.stepsFromHomeCount):
                 self.allShades[i].motor.direction = self.allShades[i].motor.coverDirection
                 self.pi.write(self.allShades[i].motor.dirPin, self.allShades[i].motor.coverDirection)
@@ -172,7 +178,37 @@ class Unit():
                 self.allShades[i].motor.direction = self.allShades[i].motor.uncoverDirection
                 self.pi.write(self.allShades[i].motor.dirPin, self.allShades[i].motor.uncoverDirection)
                 self.allShades[i].motor.stepsToDest = self.allShades[i].motor.stepsFromHomeCount - theDestination 
-            
+
+    def gotoFreehand(self, event, leftPct, rightPct, topPct, botPct):
+        #jge - take the decimals from the freehand input and translate to real
+        #jge - world numbers and pass to the gotoPreset
+        leftDest = math.trunc(leftPct * self.widthInSteps)
+        rightDest = math.trunc(rightPct * self.widthInSteps)
+        topDest = math.trunc(topPct * self.heightInSteps)
+        botDest = math.trunc(botPct * self.heightInSteps)
+
+        if (self.leftShade.motor.stepsFromHomeCount > leftDest):
+            self.leftShade.preset[6] = self.leftShade.motor.stepsFromHomeCount - leftDest
+        else:
+            self.leftShade.preset[6] = leftDest - self.leftShade.motor.stepsFromHomeCount            
+
+        if (self.rightShade.motor.stepsFromHomeCount > rightDest):
+            self.rightShade.preset[6] = self.rightShade.motor.stepsFromHomeCount - rightDest
+        else:
+            self.rightShade.preset[6] = rightDest - self.rightShade.motor.stepsFromHomeCount   
+
+        if (self.topShade.motor.stepsFromHomeCount > topDest):
+            self.topShade.preset[6] = self.topShade.motor.stepsFromHomeCount - topDest
+        else:
+            self.topShade.preset[6] = topDest - self.topShade.motor.stepsFromHomeCount    
+
+        if (self.botShade.motor.stepsFromHomeCount > botDest):
+            self.botShade.preset[6] = self.botShade.motor.stepsFromHomeCount - botDest
+        else:
+            self.botShade.preset[6] = botDest - self.botShade.motor.stepsFromHomeCount      
+
+        self.gotoPreset('freeHand', 7)                  
+
     def gotoPreset(self, event, presetNo):
         self.pAL('Going to preset', 'info')
         ################################
@@ -194,9 +230,7 @@ class Unit():
         for i, thisShade in enumerate(tempSortedShades):
             #jge - forget about shades who may already be in position
             if (tempSortedShades[i].motor.stepsToDest != 0):
-                print('193 - ' + tempSortedShades[i].name + ' stepsToDest = ' + str(tempSortedShades[i].motor.stepsToDest))
                 sortedShades.append(tempSortedShades[i])
-        print('194 - len(sortedShades) = ' + str(len(sortedShades)))
                       
         #jge - build the starting ramp of the wave.  Only add the pins
         #jge - for the shades that still have steps to move.  The bitmask 
@@ -226,18 +260,12 @@ class Unit():
             else:
                 #jge - all steps have been accounted for
                 break
-        print('225 - len(wfStart) = ' + str(len(wfStart)))
         stepsAlreadyTaken = pulseCount
-        print('227 - len(sortedShades) = ' + str(len(sortedShades)))
 
         tempSortedShades.clear()
         #jge - remove any shades who may have no more steps left
         for i, thisShade in enumerate(sortedShades):
-            print('229 - this sortedShade = ' + sortedShades[i].name)
             if (sortedShades[i].motor.stepsToDest <= stepsAlreadyTaken):
-                print('230 - removing ' + sortedShades[i].name)
-                print('231- this sorted shades stepsToDest = ' + str(sortedShades[i].motor.stepsToDest))
-                print('232 - steps already taken = ' + str(stepsAlreadyTaken))
                 sortedShades[i].motor.stepsToDest = 0
                 #maybe now sortedShades.remove(sortedShades[i])
             else:
@@ -274,13 +302,11 @@ class Unit():
         wfMiddle_D_LoopCount = 0
 
         #jge - it's possible that the ramp used up all the steps
-        print('260 - len(sortedShades = ' + str(len(sortedShades)))
         if (len(sortedShades) > 0):
             wfMiddle_A, wfMiddle_A_LoopCount, wfMiddle_A_Singles = self.buildMiddleWave(stepsAlreadyTaken, sortedShades)    
             sortedShades.remove(sortedShades[0])
             stepsAlreadyTaken += (wfMiddle_A_LoopCount * 256) + wfMiddle_A_Singles
-            print('264 - len(wfMiddle_A) = ' + str(len(wfMiddle_A)))
-            print('265 - len(sortedShades) = ' + str(len(sortedShades)))
+
             if (len(sortedShades) > 0):
                 wfMiddle_B, wfMiddle_B_LoopCount, wfMiddle_B_Singles = self.buildMiddleWave(stepsAlreadyTaken, sortedShades)    
                 sortedShades.remove(sortedShades[0])
@@ -299,7 +325,6 @@ class Unit():
         #jge - Use Wave_add_generic to "convert" the arrays of pulses
         #jge - into waves that will be fed to pigpio with the wave_chain
         #jge - method
-
         self.pi.wave_add_generic(wfStart)
         
         #jge - Build an array of the waves to make clean up easier
@@ -311,25 +336,21 @@ class Unit():
             allWaves.append(startRamp)
 
             if (len(wfMiddle_A) > 0):
-                print('---wfMiddle_A len = ' + str(len(wfMiddle_A)))
                 self.pi.wave_add_generic(wfMiddle_A)
                 middleWave_A = self.pi.wave_create()
                 allWaves.append(middleWave_A)
                 
             if (len(wfMiddle_B) > 0):
-                print('---wfMiddle_B len = ' + str(len(wfMiddle_B)))
                 self.pi.wave_add_generic(wfMiddle_B)
                 middleWave_B = self.pi.wave_create()
                 allWaves.append(middleWave_B)
 
             if (len(wfMiddle_C) > 0):
-                print('---wfMiddle_C len = ' + str(len(wfMiddle_C)))
                 self.pi.wave_add_generic(wfMiddle_C)
                 middleWave_C = self.pi.wave_create()
                 allWaves.append(middleWave_C)
 
-            if (len(wfMiddle_D) > 0):
-                print('---wfMiddle_D len = ' + str(len(wfMiddle_D)))                
+            if (len(wfMiddle_D) > 0):             
                 self.pi.wave_add_generic(wfMiddle_D)
                 middleWave_D = self.pi.wave_create()
                 allWaves.append(middleWave_D)                
@@ -341,7 +362,6 @@ class Unit():
             try:
                 
                 if (len(wfMiddle_D) > 0):
-                    print('wfMiddle_D len = ' + str(len(wfMiddle_D)))
                     #jge - all elements have length
                     self.pi.wave_chain([
                        startRamp,        
@@ -360,7 +380,6 @@ class Unit():
                        ])
                 else:
                     if (len(wfMiddle_C) > 0):
-                        print('wfMiddle_C len = ' + str(len(wfMiddle_C)))
                         #jge - C is last to have pulses
                         self.pi.wave_chain([
                            startRamp,        
@@ -375,14 +394,7 @@ class Unit():
                            255, 1, wfMiddle_C_Singles, wfMiddle_C_LoopCount,                                  
                            ])                
                     else:
-                        if (len(wfMiddle_B) > 0):
-                            #print('wfMiddle_A len = ' + str(len(wfMiddle_A)))                                                      
-                            #print('wfMiddle_B len = ' + str(len(wfMiddle_B)))                            
-                            #print('*** wfMiddle_B first element = ' + str(wfMiddle_B[0]))
-                            #print('*** wfMiddle_B second element = ' + str(wfMiddle_B[1]))
-                            #print('*** wfMMiddle_B_Singles = ' + str(wfMiddle_B_Singles))
-                            #print('*** wfMMiddle_B_LoopCount = ' + str(wfMiddle_B_LoopCount))
-                            
+                        if (len(wfMiddle_B) > 0):                          
                             #jge - B is last to have pulses
                             self.pi.wave_chain([
                                startRamp,        
@@ -394,8 +406,7 @@ class Unit():
                                255, 1, wfMiddle_B_Singles, wfMiddle_B_LoopCount,          
                                ])           
                         else:
-                            if (len(wfMiddle_A) > 0):
-                                print('wfMiddle_A len = ' + str(len(wfMiddle_A)))                                
+                            if (len(wfMiddle_A) > 0):                           
                                 #jge - A is last to have pulses
                                 self.pi.wave_chain([
                                    startRamp,        
@@ -404,8 +415,7 @@ class Unit():
                                    255, 1, wfMiddle_A_Singles, wfMiddle_A_LoopCount, 
                                    ])           
                             else:
-                                if (len(wfStart) > 0):
-                                    print('wfStart len = ' + str(len(wfStart)))                                    
+                                if (len(wfStart) > 0):                                  
                                     #jge - startRamp is last to have pulses
                                     self.pi.wave_chain([
                                        startRamp,        
@@ -414,7 +424,6 @@ class Unit():
                 self.pAL('in gotoPreset - trying wave chain - ' + str(e), 'error')
                 exception_type, exception_obj, exception_tb = sys.exc_info()
                 fname = exception_tb.tb_frame.f_code.co_filename
-                print(exception_type, fname, exception_tb.tb_lineno)
                 
             #jge - Get control of the situation.  No more phone calls                
             while self.pi.wave_tx_busy():
@@ -436,15 +445,7 @@ class Unit():
                     self.pi.wave_delete(allWaves[i])
                 except Exception as e:
                     self.pAL('in gotoPreset deleting waves - ' + str(e), 'error')
-           # self.pi.wave_clear()
-           #sleep(.05)
-           
-        #sortedShades.clear()
-        #wfStart.clear()
-        #wfMiddle_A.clear()
-        #wfMiddle_B.clear()
-        #wfMiddle_C.clear()
-        #wfMiddle_D.clear()
+                    self.pi.wave_clear()
         
         self.sleepAll()
         self.goingToPreset = 0
@@ -661,35 +662,11 @@ class Motor():
                   ' dir = ' + str(self.direction) +
                   ' cov dir = ' + str(self.coverDirection), 'info')       
             self.stop(self)
-
-            #if (self.stepsFromHomeCount == 0 and self.direction == self.uncoverDirection):
-                #jge - since it's at zero, may as well zero it
-            #    self.moveOffSwitch(self)
-            
-        #jge - the moveOffSwitch method wreaks havoc on this method
-        #jge - the wave is finished before the motor is, so need
-        #jge - to account for situations where it has driven the
-        #jge - count below zero
-
-        ####################################
-        if (
-            self.stepsFromHomeCount == 0 and
-            self.prevStepsFromHomeCount > 0 and
-            self.direction == self.uncoverDirection and
-            self.isHoming == 0
-            ):         
-            print('45454545 - lagTime = ' + str(self.lagTime)) 
-            #self.isHoming = 1
-            #sleep(self.lagTime)
-            #self.moveToSwitch('mayAsWell')
-        ####################################
-
-            
+                      
         if (self.stepsFromHomeCount < 0):
             self.stepsFromHomeCount = 0
 
         self.prevStepsFromHomeCount = self.stepsFromHomeCount
-        #print('55555555555555 - self.direction = ' + str(self.direction) + ' still writing stepsFromHome - ' + str(self.stepsFromHomeCount))
             
     def stop(self, event):
         #jge - stop motion then sleep
@@ -708,12 +685,10 @@ class Motor():
             self.move('faultFind', self.uncoverDirection)
 
     def moveOffSwitch(self, event):
-        print('in move off switch')
         self.wakeUp()
         
         while (self.parent.pi.read(self.homeSwitch.switchPin) == 1):
             sleep(.05)
-            print('should be running away from switch')
             self.parent.pi.write(self.dirPin, self.coverDirection)
             self.parent.pi.set_PWM_dutycycle(self.stepPin, 128)  # PWM 1/2 On 1/2 Off
             self.parent.pi.set_PWM_frequency(self.stepPin, 500)
@@ -721,96 +696,12 @@ class Motor():
         t_end = time.time() + .25
         while time.time() < t_end:
             sleep(.05)
-            print('should be running away from switch')
             self.parent.pi.write(self.dirPin, self.coverDirection)
             self.parent.pi.set_PWM_dutycycle(self.stepPin, 128)  # PWM 1/2 On 1/2 Off
             self.parent.pi.set_PWM_frequency(self.stepPin, 500)
             
-        print('switch is cleared')
         self.stop('limit')
-        self.stepsFromHomeCount = 0
-        
-        #t_end = time.time() + 10
-        #while time.time() < t_end:
-        #    print('buffer - should be running away from switch')
-        #    self.parent.pi.write(self.dirPin, self.coverDirection)
-        #    self.parent.pi.set_PWM_dutycycle(self.stepPin, 128)  # PWM 1/2 On 1/2 Off
-        #    self.parent.pi.set_PWM_frequency(self.stepPin, 500)
-        #    sleep(.01)
-        #print('switch is cleared and buffered')
-        #self.stop('limit')
-
-
-        #self.wakeUp()
-        #runAway = 1
-        #while (runAway == 1):
-        #    #sleep(1)
-        #    runAway = 0
-        #self.stop('limit')
-        
-
-        '''
-        ####
-        print('77777777777777 stepsfromhomecount = ' + str(self.stepsFromHomeCount))
-        self.parent.pAL('in moveOffSwitch method for ' + self.name, 'info')
-        moveToSwitch = []
-        movingOut = []    
-        wid = 0
-        cushion = []
-        cushionStepCount = 10
-
-        #jge - make sure the motor is awake
-        self.wakeUp()
-        #jge - set the direction pin
-        self.parent.pi.write(self.dirPin, self.coverDirection)
-        
-        #jge - need to handle two scenarios.  1 - when being
-        #jge - initiated from a motor.move when stopAtWideOpen = 0
-        #jge - 2 - when being initiated from a zero steps left 
-        
-        #if (self.moverInvoked == 1):
-            #jge - set the direction pin to move away from switch
-        #self.parent.pi.write(self.dirPin, self.coverDirection)
-
-
-        #jge - build a generic single pulse
-        movingOut.append(pigpio.pulse(1<<self.stepPin, 0, 1100))
-        movingOut.append(pigpio.pulse(0, 1<<self.stepPin, 1100))
-
-        while (self.parent.pi.read(self.homeSwitch.switchPin) == 1):
-            self.parent.pi.wave_add_generic(movingOut)
-            wid = self.parent.pi.wave_create()
-            self.parent.pi.wave_send_once(wid)
-            while self.parent.pi.wave_tx_busy():
-                time.sleep(0.1)       
-            
-        #jge - add some number of steps to completely clear the switch 
-        x = 1
-        while (x < cushionStepCount):
-            cushion.append(pigpio.pulse(1<<self.stepPin, 0, 1100))
-            cushion.append(pigpio.pulse(0, 1<<self.stepPin, 1100))
-            x+=1
-                
-        self.parent.pi.wave_add_generic(movingOut)
-        wid = self.parent.pi.wave_create()
-        self.parent.pi.wave_send_once(wid)
-        while self.parent.pi.wave_tx_busy():
-            time.sleep(0.1)
-        
-        self.stop('limit')
-        
-        try:
-            self.parent.pi.wave_delete(wid)
-        except Exception as e:
-                self.parent.pAL(str(e), 'error')
-                self.parent.pi.wave_clear()
-
-        '''
-        #jge - now that off of switch and cushioned, set to 0
-        #self.stepsFromHomeCount = 0
-        #print('8888888888888888888 just set stepsfromhomeCount = 0')
-        #print('888888888888888888 stepsfromhomecount = ' + str(self.stepsFromHomeCount))
-        #print('88888888888888888 stepsToDest = ' + str(self.stepsToDest))
+        self.stepsFromHomeCount = 0      
         
     def sleep(self):
         #jge - this turns off motor voltage
