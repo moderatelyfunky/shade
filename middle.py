@@ -4,6 +4,7 @@
 #jge - the controller isn't built.
 
 import configparser
+import math
 
 class Middle():
     def __init__(self): 
@@ -31,7 +32,13 @@ class Middle():
         if (self.piHere == '1'):
             self.gUnit.gotoPreset(event, presetNo)
             
-        print('Finished going to preset ' + str(presetNo))  
+        print('Finished going to preset ' + str(presetNo))
+
+    def gotoFreehand(self, event, leftShadePct, rightShadePct, topShadePct, botShadePct):
+        if (self.piHere == '1'):
+            self.gUnit.gotoFreehand(event, leftShadePct, rightShadePct, topShadePct, botShadePct)
+            
+        print('Finished going to Freehand - leftPct:' + str(round(leftShadePct, 2)) + ', rightPct: ' + str(round(rightShadePct, 2)) + ', topPct: ' + str(round(topShadePct, 2)) + ', botPct: ' + str(round(botShadePct, 2)))          
 
     def writePreset(self, event, presetNo):
         if (self.piHere == '1'):

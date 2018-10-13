@@ -12,6 +12,7 @@ class DrawingCanvas():
     def __init__(self, drawing_enabled, touchScreen):
         self.drawing_enabled = drawing_enabled
         self.the_points = []
+        self.touchScreen = touchScreen
 
         #jge - color choices - http://www.science.smith.edu/dftwiki/index.php/Color_Charts_for_TKinter
         self.the_canvas = tk.Canvas(
@@ -44,7 +45,6 @@ class DrawingCanvas():
         bottommost_y = 0
 
         for p in self.the_points:
-            #print("(" + str(p.x) + ", " + str(p.y) + ")")
             if p.x > rightmost_x:
                 rightmost_x = p.x
                 rightmost_y = p.y
@@ -57,13 +57,6 @@ class DrawingCanvas():
             if p.y > bottommost_y:
                 bottommost_x = p.x
                 bottommost_y = p.y
-
-        #print("Rightmost point = (" + str(rightmost_x) + ", " + str(rightmost_y) + ")")
-        #print("Leftmost point = (" + str(leftmost_x) + ", " + str(leftmost_y) + ")")
-        #print("Topmost point = (" + str(topmost_x) + ", " + str(topmost_y) + ")")
-        #print("Bottommost point = (" + str(bottommost_x) + ", " + str(bottommost_y) + ")")
-        #print("Duuu - the canvas is " + str(self.the_canvas.winfo_width()) + ' pixels high')
-        #print("dddddduuuu - the canvas is " + str(self.the_canvas.winfo_height()) + ' pixels wide')
 
         #jge - now get percentage to cover.
         #jge - swap x and y because of portrait orientation 
@@ -83,11 +76,7 @@ class DrawingCanvas():
 
         self.the_canvas.delete("all")
         ovalId = self.the_canvas.create_oval(leftmost_x, topmost_y, rightmost_x, bottommost_y)
-
-        print('duuuu the left shade should cover ' + str(leftShadePct) + ' starting from the left') 
-        print('duuuu the right shade should cover ' + str(rightShadePct) + ' starting from the right') 
-        print('duuu the top shade should cover ' + str(topShadePct) + ' starting from the top')
-        print('duuu the bot shade should cover ' + str(botShadePct) + ' starting from the bottom')
+        self.touchScreen.gui.app.after(100, mid.gotoFreehand('freeHand', leftShadePct, rightShadePct, topShadePct, botShadePct))
 
     def start_drawing(self, event):
         if self.drawing_enabled:
@@ -200,9 +189,8 @@ class PresetButton(tk.Button):
             # jge - save the preset if they held it down
             if (self.btnTimer.timerCount > 2):
                 mid.writePreset(event, self.presetNo)
-                # jge - flash to indicate successful save, but failing miserably at making it happen
+                # jge - flash to indicate successful save
                 # abj - making it happen with 5 separate threads
-                # there's probably a better way
                 t = th.Timer(0.25, lambda: event.widget.configure(image=self.touchScreen.images.smallButtonGreen))
                 t.start()
                 t1 = th.Timer(.5, lambda: event.widget.configure(image=self.touchScreen.images.smallRoundButton))

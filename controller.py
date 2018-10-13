@@ -37,7 +37,9 @@ class Unit():
         
         #jge - get dimensions for freehand work
         self.widthInSteps = self.config.get('config', 'widthInSteps')
+        self.pAL('Width in steps = ' + str(self.widthInSteps), 'info')
         self.heightInSteps = self.config.get('config', 'heightInSteps')
+        self.pAL('Height in steps = ' + str(self.heightInSteps), 'info')
 
         self.pi = pigpio.pi() # Connect to pigpiod daemon
         pigpio.exceptions = True
@@ -153,14 +155,14 @@ class Unit():
             self.config.write(config_file)
 
     def getPresets(self, shade):
-        #jge - read the ini for presets       
+        #jge - read the ini for the particular preset that made this call       
         shade.preset.append(int(self.config.get('presets', shade.name + ' 1')))
         shade.preset.append(int(self.config.get('presets', shade.name + ' 2')))
         shade.preset.append(int(self.config.get('presets', shade.name + ' 3')))
         shade.preset.append(int(self.config.get('presets', shade.name + ' 4')))
         shade.preset.append(int(self.config.get('presets', shade.name + ' open full')))
         shade.preset.append(int(self.config.get('presets', shade.name + ' closed center')))
-        shade.preset.appent(0, shade.name + ' freehand')      
+        shade.preset.append(0)      
 
     def getPresetPositions(self, presetNo):
         #jge - Use the preset number to retrieve the positions for each 
@@ -182,31 +184,35 @@ class Unit():
     def gotoFreehand(self, event, leftPct, rightPct, topPct, botPct):
         #jge - take the decimals from the freehand input and translate to real
         #jge - world numbers and pass to the gotoPreset
-        leftDest = math.trunc(leftPct * self.widthInSteps)
-        rightDest = math.trunc(rightPct * self.widthInSteps)
-        topDest = math.trunc(topPct * self.heightInSteps)
-        botDest = math.trunc(botPct * self.heightInSteps)
+        leftDest = math.trunc(leftPct * float(self.widthInSteps))
+        rightDest = math.trunc(rightPct * float(self.widthInSteps))
+        topDest = math.trunc(topPct * float(self.heightInSteps))
+        botDest = math.trunc(botPct * float(self.heightInSteps))
 
         if (self.leftShade.motor.stepsFromHomeCount > leftDest):
             self.leftShade.preset[6] = self.leftShade.motor.stepsFromHomeCount - leftDest
         else:
             self.leftShade.preset[6] = leftDest - self.leftShade.motor.stepsFromHomeCount            
+        print('left dest = ' + str(self.leftShade.preset[6]))
 
         if (self.rightShade.motor.stepsFromHomeCount > rightDest):
             self.rightShade.preset[6] = self.rightShade.motor.stepsFromHomeCount - rightDest
         else:
             self.rightShade.preset[6] = rightDest - self.rightShade.motor.stepsFromHomeCount   
+        print('right dest = ' + str(self.rightShade.preset[6]))
 
         if (self.topShade.motor.stepsFromHomeCount > topDest):
             self.topShade.preset[6] = self.topShade.motor.stepsFromHomeCount - topDest
         else:
             self.topShade.preset[6] = topDest - self.topShade.motor.stepsFromHomeCount    
+        print('top dest = ' + str(self.topShade.preset[6]))
 
         if (self.botShade.motor.stepsFromHomeCount > botDest):
             self.botShade.preset[6] = self.botShade.motor.stepsFromHomeCount - botDest
         else:
             self.botShade.preset[6] = botDest - self.botShade.motor.stepsFromHomeCount      
-
+        print('bot shade dest = ' + str(self.botShade.preset[6]))
+        
         self.gotoPreset('freeHand', 7)                  
 
     def gotoPreset(self, event, presetNo):
