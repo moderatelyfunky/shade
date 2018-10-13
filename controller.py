@@ -50,22 +50,22 @@ class Unit():
         #jge - HomeSwitch constructors.  1st arg - gpio
         ##########################################################
         self.leftHomeSwitch = HomeSwitch(self, 16, 'left home switch')
-        self.leftMotor = Motor(self, 6, 26, 19, 0, 'motor 3', 0, 1, self.leftHomeSwitch)
+        self.leftMotor = Motor(self, 6, 26, 19, 0, 'motor 3', 0, 1, self.leftHomeSwitch, .5)
         self.leftShade = Shade(self, self.leftMotor,'left shade')
         self.getPresets(self.leftShade)
 
         self.rightHomeSwitch = HomeSwitch(self, 22, 'right home switch')
-        self.rightMotor = Motor(self, 12, 24, 23, 0, 'motor 1', 0, 1, self.rightHomeSwitch)
+        self.rightMotor = Motor(self, 12, 24, 23, 0, 'motor 1', 0, 1, self.rightHomeSwitch, 1)
         self.rightShade = Shade(self, self.rightMotor, 'right shade')
         self.getPresets(self.rightShade)
         
         self.topHomeSwitch = HomeSwitch(self, 4, 'top home switch')
-        self.topMotor = Motor(self, 5, 27, 17, 0, 'motor 2', 0, 1, self.topHomeSwitch)
+        self.topMotor = Motor(self, 5, 27, 17, 0, 'motor 2', 0, 1, self.topHomeSwitch, 1.5)
         self.topShade = Shade(self, self.topMotor, 'top shade')
         self.getPresets(self.topShade)
         
         self.botHomeSwitch = HomeSwitch(self, 25, 'bottom home switch')
-        self.botMotor = Motor(self, 13, 20, 21, 0, 'motor 4', 1, 0, self.botHomeSwitch)
+        self.botMotor = Motor(self, 13, 20, 21, 0, 'motor 4', 1, 0, self.botHomeSwitch, 2)
         self.botShade = Shade(self, self.botMotor, 'bot shade')
         self.getPresets(self.botShade)
         
@@ -123,6 +123,7 @@ class Unit():
     def homeAll(self):
         for i, thisShade in enumerate(self.allShades):
             self.pAL('Homing ' + thisShade.name, 'info')
+            sleep(.5)
             thisShade.motor.isHoming = 1
             thisShade.motor.moveToSwitch('homeAll')
 
@@ -588,7 +589,7 @@ class HomeSwitch():
         self.prevState = self.state
 
 class Motor():
-    def __init__(self, parent, sleepPin = 0, dirPin = 0, stepPin = 0, direction = 0, name = '', coverDirection = 0, uncoverDirection = 0, homeSwitch = 0):
+    def __init__(self, parent, sleepPin = 0, dirPin = 0, stepPin = 0, direction = 0, name = '', coverDirection = 0, uncoverDirection = 0, homeSwitch = 0, lagTime = 0):
         self.parent = parent
         self.sleepPin = sleepPin
         self.dirPin = dirPin
@@ -609,6 +610,8 @@ class Motor():
         self.maxSteps = 1000000
         self.parent.pi.write(self.stepPin, 1)
         self.isHoming = 0
+        self.prevStepsFromHomeCount = 0
+        self.lagTime = lagTime
 
         self.parent.pAL('Created ' + self.name, 'info')
 
@@ -646,7 +649,7 @@ class Motor():
                 (self.stepsFromHomeCount == 0 and self.direction == self.uncoverDirection) or
                 (self.stepsFromHomeCount >= self.maxSteps and self.direction == self.coverDirection)
             ) and
-            self.isHoming == False
+            self.isHoming == 0
            ):
             self.parent.pAL('in Motor cbf - Stopping motor ' + self.name +
                   ' haltAll = ' + str(self.parent.haltAll) +
@@ -663,9 +666,25 @@ class Motor():
         #jge - the wave is finished before the motor is, so need
         #jge - to account for situations where it has driven the
         #jge - count below zero
+
+        ####################################
+        if (
+            self.stepsFromHomeCount == 0 and
+            self.prevStepsFromHomeCount > 0 and
+            self.direction == self.uncoverDirection and
+            self.isHoming == 0
+            ):         
+            print('45454545 - lagTime = ' + str(self.lagTime)) 
+            #self.isHoming = 1
+            #sleep(self.lagTime)
+            #self.moveToSwitch('mayAsWell')
+        ####################################
+
+            
         if (self.stepsFromHomeCount < 0):
             self.stepsFromHomeCount = 0
 
+        self.prevStepsFromHomeCount = self.stepsFromHomeCount
         #print('55555555555555 - self.direction = ' + str(self.direction) + ' still writing stepsFromHome - ' + str(self.stepsFromHomeCount))
             
     def stop(self, event):
@@ -681,9 +700,53 @@ class Motor():
         if (self.parent.pi.read(self.homeSwitch.switchPin) == 1):
             self.moveOffSwitch('faultFind')
         else:
+            #jge - shouldn't self.homing be set here?
             self.move('faultFind', self.uncoverDirection)
 
     def moveOffSwitch(self, event):
+        print('in move off switch')
+        self.wakeUp()
+        
+        while (self.parent.pi.read(self.homeSwitch.switchPin) == 1):
+            sleep(.05)
+            print('should be running away from switch')
+            self.parent.pi.write(self.dirPin, self.coverDirection)
+            self.parent.pi.set_PWM_dutycycle(self.stepPin, 128)  # PWM 1/2 On 1/2 Off
+            self.parent.pi.set_PWM_frequency(self.stepPin, 500)
+
+        t_end = time.time() + .25
+        while time.time() < t_end:
+            sleep(.05)
+            print('should be running away from switch')
+            self.parent.pi.write(self.dirPin, self.coverDirection)
+            self.parent.pi.set_PWM_dutycycle(self.stepPin, 128)  # PWM 1/2 On 1/2 Off
+            self.parent.pi.set_PWM_frequency(self.stepPin, 500)
+            
+        print('switch is cleared')
+        self.stop('limit')
+        self.stepsFromHomeCount = 0
+        
+        #t_end = time.time() + 10
+        #while time.time() < t_end:
+        #    print('buffer - should be running away from switch')
+        #    self.parent.pi.write(self.dirPin, self.coverDirection)
+        #    self.parent.pi.set_PWM_dutycycle(self.stepPin, 128)  # PWM 1/2 On 1/2 Off
+        #    self.parent.pi.set_PWM_frequency(self.stepPin, 500)
+        #    sleep(.01)
+        #print('switch is cleared and buffered')
+        #self.stop('limit')
+
+
+        #self.wakeUp()
+        #runAway = 1
+        #while (runAway == 1):
+        #    #sleep(1)
+        #    runAway = 0
+        #self.stop('limit')
+        
+
+        '''
+        ####
         print('77777777777777 stepsfromhomecount = ' + str(self.stepsFromHomeCount))
         self.parent.pAL('in moveOffSwitch method for ' + self.name, 'info')
         moveToSwitch = []
@@ -705,22 +768,6 @@ class Motor():
             #jge - set the direction pin to move away from switch
         #self.parent.pi.write(self.dirPin, self.coverDirection)
 
-        '''
-        else:
-            #jge - set the direction pin to move toward the swtich
-            self.parent.pi.write(self.dirPin, self.uncoverDirection)
-
-            #jge - build a generic single pulse
-            moveToSwitch.append(pigpio.pulse(1<<self.stepPin, 0, 1100))
-            moveToSwitch.append(pigpio.pulse(0, 1<<self.stepPin, 1100))
-
-            while (self.parent.pi.read(self.homeSwitch.switchPin) == 0):
-                self.parent.pi.wave_add_generic(moveToSwitch)
-                wid = self.parent.pi.wave_create()
-                self.parent.pi.wave_send_once(wid)
-                while self.parent.pi.wave_tx_busy():
-                    time.sleep(0.1)             
-        '''
 
         #jge - build a generic single pulse
         movingOut.append(pigpio.pulse(1<<self.stepPin, 0, 1100))
@@ -754,8 +801,9 @@ class Motor():
                 self.parent.pAL(str(e), 'error')
                 self.parent.pi.wave_clear()
 
+        '''
         #jge - now that off of switch and cushioned, set to 0
-        self.stepsFromHomeCount = 0
+        #self.stepsFromHomeCount = 0
         #print('8888888888888888888 just set stepsfromhomeCount = 0')
         #print('888888888888888888 stepsfromhomecount = ' + str(self.stepsFromHomeCount))
         #print('88888888888888888 stepsToDest = ' + str(self.stepsToDest))
