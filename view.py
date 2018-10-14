@@ -76,7 +76,9 @@ class DrawingCanvas():
 
         self.the_canvas.delete("all")
         ovalId = self.the_canvas.create_oval(leftmost_x, topmost_y, rightmost_x, bottommost_y)
-        self.touchScreen.gui.app.after(100, mid.gotoFreehand('freeHand', leftShadePct, rightShadePct, topShadePct, botShadePct))
+        tOval = th.Timer(.5, lambda: mid.gotoFreehand('freeHand', leftShadePct, rightShadePct, topShadePct, botShadePct))
+        tOval.start()
+        #self.touchScreen.gui.app.after(100, mid.gotoFreehand('freeHand', leftShadePct, rightShadePct, topShadePct, botShadePct))
 
     def start_drawing(self, event):
         if self.drawing_enabled:

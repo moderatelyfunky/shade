@@ -182,38 +182,19 @@ class Unit():
                 self.allShades[i].motor.stepsToDest = self.allShades[i].motor.stepsFromHomeCount - theDestination 
 
     def gotoFreehand(self, event, leftPct, rightPct, topPct, botPct):
-        #jge - take the decimals from the freehand input and translate to real
-        #jge - world numbers and pass to the gotoPreset
+        #jge - take the decimals from the freehand input and translate to 
+        #jge - real world numbers and pass to the gotoPreset
         leftDest = math.trunc(leftPct * float(self.widthInSteps))
         rightDest = math.trunc(rightPct * float(self.widthInSteps))
         topDest = math.trunc(topPct * float(self.heightInSteps))
         botDest = math.trunc(botPct * float(self.heightInSteps))
 
-        if (self.leftShade.motor.stepsFromHomeCount > leftDest):
-            self.leftShade.preset[6] = self.leftShade.motor.stepsFromHomeCount - leftDest
-        else:
-            self.leftShade.preset[6] = leftDest - self.leftShade.motor.stepsFromHomeCount            
-        print('left dest = ' + str(self.leftShade.preset[6]))
+        self.leftShade.preset[6] = leftDest
+        self.rightShade.preset[6] = rightDest
+        self.topShade.preset[6] = topDest
+        self.botShade.preset[6] = botDest
 
-        if (self.rightShade.motor.stepsFromHomeCount > rightDest):
-            self.rightShade.preset[6] = self.rightShade.motor.stepsFromHomeCount - rightDest
-        else:
-            self.rightShade.preset[6] = rightDest - self.rightShade.motor.stepsFromHomeCount   
-        print('right dest = ' + str(self.rightShade.preset[6]))
-
-        if (self.topShade.motor.stepsFromHomeCount > topDest):
-            self.topShade.preset[6] = self.topShade.motor.stepsFromHomeCount - topDest
-        else:
-            self.topShade.preset[6] = topDest - self.topShade.motor.stepsFromHomeCount    
-        print('top dest = ' + str(self.topShade.preset[6]))
-
-        if (self.botShade.motor.stepsFromHomeCount > botDest):
-            self.botShade.preset[6] = self.botShade.motor.stepsFromHomeCount - botDest
-        else:
-            self.botShade.preset[6] = botDest - self.botShade.motor.stepsFromHomeCount      
-        print('bot shade dest = ' + str(self.botShade.preset[6]))
-        
-        self.gotoPreset('freeHand', 7)                  
+        self.gotoPreset('freeHand', 7)
 
     def gotoPreset(self, event, presetNo):
         self.pAL('Going to preset', 'info')
