@@ -2,11 +2,14 @@ import tkinter as tk
 import time
 import middle
 import threading as th
+import configparser
+import math
 
 class DrawingPoint():
     def __init__(self):
         self.x = 0
         self.y = 0
+
 
 class DrawingCanvas():
     def __init__(self, drawing_enabled, touchScreen):
@@ -14,14 +17,24 @@ class DrawingCanvas():
         self.the_points = []
         self.touchScreen = touchScreen
 
+        #jge - get freehand proportions
+        canvasWidth = 0
+        canvasHeight = 0
+        if (self.touchScreen.gui.heightInSteps > self.touchScreen.gui.widthInSteps):
+            canvasWidth = int(self.touchScreen.gui.maxFreehandWidth)
+            canvasHeight = math.trunc((int(self.touchScreen.gui.widthInSteps) / int(self.touchScreen.gui.heightInSteps)) * canvasWidth)
+        else:
+            canvasHeight = int(self.touchScreen.gui.maxFreehandHeight)
+            canvasWidth = math.trunc((int(self.touchScreen.gui.heightInSteps) / int(self.touchScreen.gui.widthInSteps)) * canvasHeight)
+
         #jge - color choices - http://www.science.smith.edu/dftwiki/index.php/Color_Charts_for_TKinter
         self.the_canvas = tk.Canvas(
             touchScreen.gui.app, 
-            width=195, 
-            height=419, 
-            borderwidth=1, 
+            width=canvasWidth, 
+            height=canvasHeight, 
+            borderwidth=self.touchScreen.gui.freehandBorderWidth, 
 
-            bg="deepskyblue3"
+            bg=self.touchScreen.gui.freehandColor
         )
         self.the_canvas.grid(row=1, column=0, rowspan=5, ipadx=3, ipady=3)
         self.the_canvas.bind('<ButtonPress-1>', lambda event: self.enable_drawing())
@@ -35,12 +48,14 @@ class DrawingCanvas():
 
     def disable_drawing(self):
         self.drawing_enabled = False
-        leftmost_x = 359
+        #jge - dynamic replacement - leftmost_x = 359
+        leftmost_x = self.the_canvas.winfo_width()
         leftmost_y = 0
         rightmost_x = 0
         rightmost_y = 0
         topmost_x = 0
-        topmost_y = 430
+        #jge - dynamic replacement topmost_y = 430
+        topmost_y = self.the_canvas.winfo_height()
         bottommost_x = 0
         bottommost_y = 0
 
@@ -78,67 +93,21 @@ class DrawingCanvas():
         ovalId = self.the_canvas.create_oval(leftmost_x, topmost_y, rightmost_x, bottommost_y)
         tOval = th.Timer(.5, lambda: mid.gotoFreehand('freeHand', leftShadePct, rightShadePct, topShadePct, botShadePct))
         tOval.start()
-        #self.touchScreen.gui.app.after(100, mid.gotoFreehand('freeHand', leftShadePct, rightShadePct, topShadePct, botShadePct))
 
     def start_drawing(self, event):
         if self.drawing_enabled:
-            # print(event.x, event.y)
             self.the_canvas.create_rectangle((event.x, event.y) * 2)
             current_point = DrawingPoint()
             current_point.x = event.x
             current_point.y = event.y
             self.the_points.append(current_point)
 
-class Rect():
-    # (start_x, start_y) --> upper left corner
-    # (end_x, end_y) --> lower right corner
-    # the id is so we can easily delete from the canvas
-    start_x = 0
-    start_y = 0
-    end_x = 0
-    end_y = 0
-    id = 0
-
-    def __init__(self, touchScreen, start_x, start_y, end_x, end_y, id):
-        self.touchScreen = touchScreen
-        self.start_x = start_x
-        self.start_y = start_y
-        self.end_x = end_x
-        self.end_y = end_y
-        self.id = id
-        self.canvasDraw = tk.Canvas(self.touchScreen.gui.app, width=195, height=419, borderwidth=1, highlightbackground="black", highlightthickness=1)
-        self.canvasDraw.grid(row=1, column=1, rowspan=5, ipadx=3, ipady=3)
-        self.canvasDraw.bind('<ButtonPress-1>', lambda event: self.getStartCoords(event))
-        self.canvasDraw.bind('<ButtonRelease-1>', lambda event: self.getEndCoords(event))  
-
-
-    def getStartCoords(self, event):
-        # figure out where the user has clicked on the canvas
-        # store that point in the rect object
-        # and then delete the previous rectangle
-        self.start_x = event.x
-        self.start_y = event.y
-        self.canvasDraw.delete(self.id)
-        print('Starting freehand draw')
-
-
-    def getEndCoords(self, event):
-        # when the user releases the mouse, get the coords there
-        # and store them as the end point in the rect object
-        # Then draw a rectangle spanning the start to end pts
-        # and store the id of the new rectangle in the rect object
-        self.end_x = event.x
-        self.end_y = event.y
-        i = self.canvasDraw.create_rectangle(self.start_x, self.start_y, self.end_x, self.end_y, fill="black")
-        self.id = i
-        print('Stopping freehand draw')         
-
 
 class FreeHandContainer():
     def __init__(self, touchScreen):
         self.touchScreen = touchScreen
-        #self.freehandArea = Rect(touchScreen, 0, 0, 0, 0, 0)  
         self.freehandArea = DrawingCanvas(False, touchScreen)
+
 
 class ButtonTimer():
     timerOn = False
@@ -205,7 +174,6 @@ class PresetButton(tk.Button):
                 t4.start()
                 t5 = th.Timer(1.5, lambda: event.widget.configure(image=self.touchScreen.images.smallRoundButton))
                 t5.start()
-
             else:
                 mid.gotoPreset(event, self.presetNo)  
 
@@ -247,6 +215,7 @@ class ManualButton(tk.Button):
     def btnRelease(self, event):
         event.widget.configure(image=self.offImage)
         mid.stop(event, self.shade)        
+
 
 class ManualButtonContainer():
     def __init__(self, touchScreen):
@@ -303,6 +272,7 @@ class BigButton(tk.Button):
         # jge - when released, set the button image back to default
         event.widget.configure(image=self.touchScreen.images.bigRoundButton)
 
+
 class BigButtonContainer:
     def __init__(self, touchScreen):
         self.touchScreen = touchScreen
@@ -352,11 +322,29 @@ class Gui():
         self.parent = parent
         self.app = tk.Tk()
 
-        self.app.geometry("800x480")
+        #jge - read the ini file
+        self.iniFileName = 'shade.ini'
+        self.config = configparser.RawConfigParser()
+        self.config.optionxform = str
+        self.config.read(self.iniFileName)
+        self.tkGeometry = "800x480"
+        #self.tkGeometry = self.config.get('interface', 'tkGeo')
+        self.btnBackground = self.config.get('interface', 'btnBackground')
+        self.btnForeground = self.config.get('interface', 'btnForeground')
+        self.freehandColor = self.config.get('interface', 'freehandColor')
+        self.freehandBorderWidth = self.config.get('interface', 'freehandBorderWidth')
+
+        self.widthInSteps = self.config.get('config', 'widthInSteps')
+        self.heightInSteps = self.config.get('config', 'heightInSteps')
+
+        self.maxFreehandWidth = self.config.get('interface', 'maxFreehandWidth')
+        self.maxFreehandHeight = self.config.get('interface', 'maxFreehandHeight')
+
+        self.app.geometry(self.tkGeometry)
         # self.app.wm_attributes('-type', 'dock')
         self.app.title('Slim Shady')
-        self.app.option_add("Button.Background", "black")
-        self.app.option_add("Button.Foreground", "white")
+        self.app.option_add("Button.Background", self.btnBackground)
+        self.app.option_add("Button.Foreground", self.btnForeground)
         self.app.resizable(0, 0)
         # self.app.configure(background='white')
 
@@ -364,6 +352,7 @@ class Gui():
         self.app.grid_rowconfigure(6, weight=1)
         self.app.grid_columnconfigure(0, weight=1)
         self.app.grid_columnconfigure(8, weight=1)
+
 
 class TouchScreen():
     def __init__(self):
@@ -373,7 +362,6 @@ class TouchScreen():
         self.manualButtons = ManualButtonContainer(self)
         self.presetButtons = PresetButtonContainer(self)
         self.freehandInput = FreeHandContainer(self)
-
 
 # jge - build middle layer to load controller or not
 # jge - depending on the gotPi value in the ini.
