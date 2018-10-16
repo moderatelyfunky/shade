@@ -286,7 +286,6 @@ class Unit():
         for i, thisShade in enumerate(sortedShades):
             if (sortedShades[i].motor.stepsToDest <= stepsAlreadyTaken):
                 sortedShades[i].motor.stepsToDest = 0
-                #maybe now sortedShades.remove(sortedShades[i])
             else:
                 tempSortedShades.append(sortedShades[i])
 
@@ -341,9 +340,8 @@ class Unit():
                         sortedShades.remove(sortedShades[0])
                         stepsAlreadyTaken += (wfMiddle_D_LoopCount * 256) + wfMiddle_D_Singles
 
-        #jge - Use Wave_add_generic to "convert" the arrays of pulses
-        #jge - into waves that will be fed to pigpio with the wave_chain
-        #jge - method
+        #jge - Use Wave_add_generic to "convert" the arrays of pulses into
+        #jge - into waves that will be fed to pigpio with the wave_chain method
         self.pi.wave_add_generic(wfStart)
         
         #jge - Build an array of the waves to make clean up easier
@@ -374,8 +372,8 @@ class Unit():
                 middleWave_D = self.pi.wave_create()
                 allWaves.append(middleWave_D)                
 
-            #jge - this is the method that pushes the waves to the motors
-            #jge - the blocks that start with 255 are loops.  The closing
+            #jge - this is the method that pushes the waves to the motors.
+            #jge - The blocks that start with 255 are loops.  The closing
             #jge - part of the loop tells pigpio how many times to loop
             #jge - each wave and how many single iterations of it after that
             try:
@@ -441,8 +439,6 @@ class Unit():
                                        ])           
             except Exception as e:
                 self.pAL('in gotoPreset - trying wave chain - ' + str(e), 'error')
-                exception_type, exception_obj, exception_tb = sys.exc_info()
-                fname = exception_tb.tb_frame.f_code.co_filename
                 
             #jge - Get control of the situation.  No more phone calls                
             while self.pi.wave_tx_busy():
@@ -487,9 +483,6 @@ class Unit():
         #jge - is because pigpio has a limit of 256 iterations for
         #jge - each wave.  Anything over that means another loop or
         #jge - just the remainder if it's less than 256
-
-        #jge - there are many times when this returns arrays with length of two.
-        #jge - need to fix
         
         minDelay = int(self.environment.minDelay)
         wfMiddle = []
@@ -517,7 +510,7 @@ class Unit():
 
         return wfMiddle, wfMiddle_LoopCount, wfMiddle_Singles
 
-    #jge - end unit class
+    #jge - end Unit class
     ####################################################
     
 class Environment():
@@ -590,9 +583,9 @@ class HomeSwitch():
 
     def callbackFunc(self, gpio, level, tick):     
         #jge - no matter what, if the switch is closed, stop the motor.
-        #jge - take care of zeroing in the motor stop method
         #jge - also, set the haltAll at the unit to call a stop to the
-        #jge - wave_chain in the case of a preset.
+        #jge - wave_chain in the case of a gotopreset.  If not going
+        #jge - to preset, home the single running motor
         self.state = self.parent.pi.read(self.switchPin)
 
         if (self.state == 1 and self.prevState != self.state):
@@ -629,9 +622,10 @@ class Motor():
         self.stepsFromHomeObject = parent.pi.callback(self.stepPin, pigpio.RISING_EDGE, self.callbackFunc)
         self.homeSwitch = homeSwitch
         self.homeSwitch.parentMotor = self
-        #jge - todo - need to find out how many would be fully closed
-        #jge - for now set it so it doesn't interfere
-        self.maxSteps = 1000000
+        if (self.name == 'motor 1' or self.name == 'motor 3'):
+            self.maxSteps = parent.widthInSteps
+        else
+            self.maxSteps = parent.heightInSteps
         self.parent.pi.write(self.stepPin, 1)
         self.isHoming = 0
         self.prevStepsFromHomeCount = 0
@@ -696,11 +690,10 @@ class Motor():
     def moveToSwitch(self, event):
         self.parent.pAL('in moveToSwitch method', 'info')
 
-        #jge - if the switch is closed, move away otherwise move in
+        #jge - if the switch is closed, move away. otherwise, move in
         if (self.parent.pi.read(self.homeSwitch.switchPin) == 1):
             self.moveOffSwitch('faultFind')
         else:
-            #jge - shouldn't self.homing be set here?
             self.move('faultFind', self.uncoverDirection)
 
     def moveOffSwitch(self, event):
