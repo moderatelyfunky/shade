@@ -624,7 +624,7 @@ class Motor():
         self.homeSwitch.parentMotor = self
         if (self.name == 'motor 1' or self.name == 'motor 3'):
             self.maxSteps = parent.widthInSteps
-        else
+        else:
             self.maxSteps = parent.heightInSteps
         self.parent.pi.write(self.stepPin, 1)
         self.isHoming = 0
@@ -637,7 +637,7 @@ class Motor():
         #jge - make sure it's not running against the wide open stops
         #jge - allow for a move when homing all due to a switch closed
         #jge - during a gotoPreset
-        if ((direction == self.coverDirection and self.maxSteps > self.stepsFromHomeCount) or
+        if ((direction == self.coverDirection and int(self.maxSteps) > self.stepsFromHomeCount) or
             (direction == self.uncoverDirection and self.stepsFromHomeCount > 0) or
             self.parent.stopAtWideOpen == '0' or
             self.parent.haltAll == 1 or
@@ -665,7 +665,7 @@ class Motor():
         if (
             (
                 (self.stepsFromHomeCount == 0 and self.direction == self.uncoverDirection) or
-                (self.stepsFromHomeCount >= self.maxSteps and self.direction == self.coverDirection)
+                (self.stepsFromHomeCount >= int(self.maxSteps) and self.direction == self.coverDirection)
             ) and
             self.isHoming == 0
            ):
