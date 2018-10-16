@@ -235,9 +235,9 @@ class Unit():
         self.goingToPreset = 1
         self.wakeUpAll()
         self.getPresetPositions(presetNo)
-        maxDelay = self.environment.maxDelay
-        minDelay = self.environment.minDelay
-        step = self.environment.stepSize
+        maxDelay = int(self.environment.maxDelay)
+        minDelay = int(self.environment.minDelay)
+        step = int(self.environment.stepSize)
         #jge - end preset init
         ################################
 
@@ -491,7 +491,7 @@ class Unit():
         #jge - there are many times when this returns arrays with length of two.
         #jge - need to fix
         
-        minDelay = self.environment.minDelay
+        minDelay = int(self.environment.minDelay)
         wfMiddle = []
 
         #jge - store the count to feed to the wave_chain looper
@@ -577,13 +577,13 @@ class HomeSwitch():
     def __init__(self, parent, switchPin, name = ''):
         self.parent = parent
         self.parentMotor = None
-        self.switchPin = switchPin
+        self.switchPin = int(switchPin)
         self.name = name
         self.prevState = 0
         self.state = 0
-        parent.pi.set_mode(switchPin, pigpio.INPUT)
+        parent.pi.set_mode(self.switchPin, pigpio.INPUT)
         #jge - using internal resistors in addition to external
-        parent.pi.set_pull_up_down(switchPin, pigpio.PUD_DOWN)
+        parent.pi.set_pull_up_down(self.switchPin, pigpio.PUD_DOWN)
         #jge - set up callback function to look for a closing switch
         self.cbf = parent.pi.callback(self.switchPin, pigpio.EITHER_EDGE, self.callbackFunc)
         self.parent.pAL('Created ' + self.name, 'info')
@@ -615,9 +615,9 @@ class HomeSwitch():
 class Motor():
     def __init__(self, parent, sleepPin = 0, dirPin = 0, stepPin = 0, direction = 0, name = '', coverDirection = 0, uncoverDirection = 0, homeSwitch = 0, lagTime = 0):
         self.parent = parent
-        self.sleepPin = sleepPin
-        self.dirPin = dirPin
-        self.stepPin = stepPin
+        self.sleepPin = int(sleepPin)
+        self.dirPin = int(dirPin)
+        self.stepPin = int(stepPin)
         self.direction = coverDirection
         self.name = name
         self.stepsToDest = 0
