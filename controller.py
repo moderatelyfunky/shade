@@ -23,6 +23,8 @@ class Unit():
         logging.basicConfig(level=logging.INFO, 
                     filename='shade.log', # log to this file
                     format='%(asctime)s %(message)s') # include timestamp
+
+        self.logToFile = self.config.get('config', 'logToFile')
         self.pAL('====================================================', 'info')
         self.pAL('program started', 'info') 
         self.pAL('====================================================', 'info')
@@ -30,7 +32,36 @@ class Unit():
         #jge - need a master flag to halt all when a limit switch is hit during a preset move
         self.haltAll = 0
         self.goingToPreset = 0
-        
+        self.maxStepDelay = self.config.get('config', 'maxStepDelay')
+        self.minStepDelay = self.config.get('config', 'minStepDelay')
+        self.stepsToGain = self.config.get('config', 'stepsToGain')
+
+        #jge - get pin assignments
+        self.modePin1 = self.config.get('pins', 'modePin1')
+        self.modePin2 = self.config.get('pins', 'modePin2')
+        self.modePin3 = self.config.get('pins', 'modePin3')
+
+        self.leftSleepPin = self.config.get('pins', 'leftSleepPin')
+        self.leftDirPin = self.config.get('pins', 'leftDirPin')
+        self.leftStepPin = self.config.get('pins', 'leftStepPin')
+
+        self.rightSleepPin = self.config.get('pins', 'rightSleepPin')
+        self.rightDirPin = self.config.get('pins', 'rightDirPin')
+        self.rightStepPin = self.config.get('pins', 'rightStepPin')
+
+        self.topSleepPin = self.config.get('pins', 'topSleepPin')
+        self.topDirPin = self.config.get('pins', 'topDirPin')
+        self.topStepPin = self.config.get('pins', 'topStepPin')
+
+        self.botSleepPin = self.config.get('pins', 'botSleepPin')
+        self.botDirPin = self.config.get('pins', 'botDirPin')
+        self.botStepPin = self.config.get('pins', 'botStepPin')
+
+        self.leftSwitchPin = self.config.get('pins', 'leftSwitchPin')
+        self.rightSwitchPin = self.config.get('pins', 'rightSwitchPin')
+        self.topSwitchPin = self.config.get('pins', 'topSwitchPin')
+        self.botSwitchPin = self.config.get('pins', 'botSwitchPin')
+
         #jge - until the homing is working, allow the manual
         #jge - buttons to move what they think is zero
         self.stopAtWideOpen = self.config.get('config', 'stopAtWideOpen')
@@ -58,23 +89,23 @@ class Unit():
         #jge - 8th argument = lag time for simulatenous homing issues
         #jge - HomeSwitch constructors.  1st arg - gpio
         ##########################################################
-        self.leftHomeSwitch = HomeSwitch(self, 16, 'left home switch')
-        self.leftMotor = Motor(self, 6, 26, 19, 0, 'motor 3', 0, 1, self.leftHomeSwitch, .5)
+        self.leftHomeSwitch = HomeSwitch(self, self.leftSwitchPin, 'left home switch')
+        self.leftMotor = Motor(self, self.leftSleepPin, self.leftDirPin, self.leftStepPin, 0, 'motor 3', 0, 1, self.leftHomeSwitch, .5)
         self.leftShade = Shade(self, self.leftMotor,'left shade')
         self.getPresets(self.leftShade)
 
-        self.rightHomeSwitch = HomeSwitch(self, 22, 'right home switch')
-        self.rightMotor = Motor(self, 12, 24, 23, 0, 'motor 1', 0, 1, self.rightHomeSwitch, 1)
+        self.rightHomeSwitch = HomeSwitch(self, self.rightSwitchPin, 'right home switch')
+        self.rightMotor = Motor(self, self.rightSleepPin, self.rightDirPin, self.rightStepPin, 0, 'motor 1', 0, 1, self.rightHomeSwitch, 1)
         self.rightShade = Shade(self, self.rightMotor, 'right shade')
         self.getPresets(self.rightShade)
         
-        self.topHomeSwitch = HomeSwitch(self, 4, 'top home switch')
-        self.topMotor = Motor(self, 5, 27, 17, 0, 'motor 2', 0, 1, self.topHomeSwitch, 1.5)
+        self.topHomeSwitch = HomeSwitch(self, self.topSwitchPin, 'top home switch')
+        self.topMotor = Motor(self, self.topSleepPin, self.topDirPin, self.topStepPin, 0, 'motor 2', 0, 1, self.topHomeSwitch, 1.5)
         self.topShade = Shade(self, self.topMotor, 'top shade')
         self.getPresets(self.topShade)
         
-        self.botHomeSwitch = HomeSwitch(self, 25, 'bottom home switch')
-        self.botMotor = Motor(self, 13, 20, 21, 0, 'motor 4', 1, 0, self.botHomeSwitch, 2)
+        self.botHomeSwitch = HomeSwitch(self, self.botSwitchPin, 'bottom home switch')
+        self.botMotor = Motor(self, self.botSleepPin, self.botDirPin, self.botStepPin, 0, 'motor 4', 1, 0, self.botHomeSwitch, 2)
         self.botShade = Shade(self, self.botMotor, 'bot shade')
         self.getPresets(self.botShade)
         
@@ -88,7 +119,7 @@ class Unit():
         #jge - 6th argument = Minimum ""
         #jge - 7th argument - How much to gain between the min and max in each loop  
         #################################################################
-        self.environment = Environment(self, 'Full', 14, 15, 18, 1100, 400, 1) 
+        self.environment = Environment(self, 'Full', self.modePin1, self.modePin2, self.modePin3, self.maxStepDelay, self.minStepDelay, self.stepsToGain) 
         self.pAL('Created environment', 'info')
         self.allShades = [self.leftShade, self.rightShade, self.topShade, self.botShade]
         self.pAL('Created allshades array', 'info')
@@ -101,11 +132,12 @@ class Unit():
         #jge - write to console
         print(message)
 
-        #jge - write to log
-        if (msgLevel == 'error'):
-            logging.error(message)
-        elif (msgLevel == 'info'):
-            logging.info(message)
+        if (self.logToFile == '1'):
+            #jge - write to log
+            if (msgLevel == 'error'):
+                logging.error(message)
+            elif (msgLevel == 'info'):
+                logging.info(message)
 
     def wakeUpAll(self):
         for i, thisShade in enumerate(self.allShades):

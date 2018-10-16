@@ -4,6 +4,7 @@ import middle
 import threading as th
 import configparser
 import math
+from tkinter import *
 
 class DrawingPoint():
     def __init__(self):
@@ -27,16 +28,19 @@ class DrawingCanvas():
             canvasHeight = int(self.touchScreen.gui.maxFreehandHeight)
             canvasWidth = math.trunc((int(self.touchScreen.gui.heightInSteps) / int(self.touchScreen.gui.widthInSteps)) * canvasHeight)
 
-        #jge - color choices - http://www.science.smith.edu/dftwiki/index.php/Color_Charts_for_TKinter
         self.the_canvas = tk.Canvas(
             touchScreen.gui.app, 
             width=canvasWidth, 
             height=canvasHeight, 
-            borderwidth=self.touchScreen.gui.freehandBorderWidth, 
-
-            bg=self.touchScreen.gui.freehandColor
+            borderwidth=int(self.touchScreen.gui.freehandBorderWidth), 
+            relief = self.touchScreen.gui.freehandBorderRelief,
+            bg=self.touchScreen.gui.freehandColor,
+            highlightthickness = self.touchScreen.gui.freehandHighlightThickness,
+            highlightbackground = self.touchScreen.gui.freehandHighlightBackground
         )
+
         self.the_canvas.grid(row=1, column=0, rowspan=5, ipadx=3, ipady=3)
+
         self.the_canvas.bind('<ButtonPress-1>', lambda event: self.enable_drawing())
         self.the_canvas.bind('<Motion>', lambda event: self.start_drawing(event))
         self.the_canvas.bind('<ButtonRelease-1>', lambda event: self.disable_drawing())
@@ -48,29 +52,19 @@ class DrawingCanvas():
 
     def disable_drawing(self):
         self.drawing_enabled = False
-        #jge - dynamic replacement - leftmost_x = 359
         leftmost_x = self.the_canvas.winfo_width()
-        leftmost_y = 0
         rightmost_x = 0
-        rightmost_y = 0
-        topmost_x = 0
-        #jge - dynamic replacement topmost_y = 430
         topmost_y = self.the_canvas.winfo_height()
-        bottommost_x = 0
         bottommost_y = 0
 
         for p in self.the_points:
             if p.x > rightmost_x:
                 rightmost_x = p.x
-                rightmost_y = p.y
             if p.x < leftmost_x:
                 leftmost_x = p.x
-                leftmost_y = p.y
             if p.y < topmost_y:
-                topmost_x = p.x
                 topmost_y = p.y
             if p.y > bottommost_y:
-                bottommost_x = p.x
                 bottommost_y = p.y
 
         #jge - now get percentage to cover.
@@ -322,31 +316,46 @@ class Gui():
         self.parent = parent
         self.app = tk.Tk()
 
-        #jge - read the ini file
+        #jge - open the ini file
         self.iniFileName = 'shade.ini'
         self.config = configparser.RawConfigParser()
         self.config.optionxform = str
         self.config.read(self.iniFileName)
-        self.tkGeometry = "800x480"
-        #self.tkGeometry = self.config.get('interface', 'tkGeo')
-        self.btnBackground = self.config.get('interface', 'btnBackground')
-        self.btnForeground = self.config.get('interface', 'btnForeground')
-        self.freehandColor = self.config.get('interface', 'freehandColor')
-        self.freehandBorderWidth = self.config.get('interface', 'freehandBorderWidth')
 
+        #jge - get properties from the ini file
+        self.tkGeometry = self.config.get('interface', 'tkGeometry')
+
+        #jge - actual opening dimensions
         self.widthInSteps = self.config.get('config', 'widthInSteps')
         self.heightInSteps = self.config.get('config', 'heightInSteps')
 
+        self.freehandBorderWidth = self.config.get('interface', 'freehandBorderWidth')
+        self.freehandBorderRelief = self.config.get('interface', 'freehandBorderRelief')
+
+        self.freehandHighlightThickness = self.config.get('interface', 'freehandHighlightThickness')
+        self.freehandHighlightBackground = self.config.get('interface', 'freehandHighlightBackground')
+
+        #jge - these are static but could change with a different screen
         self.maxFreehandWidth = self.config.get('interface', 'maxFreehandWidth')
         self.maxFreehandHeight = self.config.get('interface', 'maxFreehandHeight')
 
+        self.btnBackground = self.config.get('interface', 'btnBackground')
+        self.btnForeground = self.config.get('interface', 'btnForeground')
+        self.backgroundColor = self.config.get('interface', 'backgroundColor')
+        self.freehandColor = self.config.get('interface', 'freehandColor')
+        self.tkDock = self.config.get('interface', 'tkDock')
+
         self.app.geometry(self.tkGeometry)
-        # self.app.wm_attributes('-type', 'dock')
-        self.app.title('Slim Shady')
+
+        if (self.tkDock == 1):
+            self.app.wm_attributes('-type', 'dock')
+
+        self.app.title('Four String Shades')
         self.app.option_add("Button.Background", self.btnBackground)
         self.app.option_add("Button.Foreground", self.btnForeground)
         self.app.resizable(0, 0)
-        # self.app.configure(background='white')
+        if (self.backgroundColor != '0'):
+            self.app.configure(background=self.backgroundColor)
 
         self.app.grid_rowconfigure(0, weight=1)
         self.app.grid_rowconfigure(6, weight=1)
