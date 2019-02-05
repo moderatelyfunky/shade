@@ -1,0 +1,57 @@
+import controller
+import pigpio
+
+class pulseTuner():
+    def __init__(self):
+        self.gUnit = controller.Unit()
+        self.sendWave()
+
+    def sendWave(self):
+        """
+        [pins]
+        modePin1 = 14
+        modePin2 = 15
+        modePin3 = 18
+        leftSleepPin = 6
+        leftDirPin = 26
+        leftStepPin = 19
+        rightSleepPin = 12
+        rightDirPin = 24
+        rightStepPin = 23
+        topSleepPin = 5
+        topDirPin = 27
+        topStepPin = 17
+        botSleepPin = 13
+        botDirPin = 20
+        botStepPin = 21
+        leftSwitchPin = 16
+        rightSwitchPin = 22
+        topSwitchPin = 4
+        botSwitchPin = 25
+        """
+
+        direction = 0
+        delay = 2000
+
+        sleepPin = 6
+        stepPin = 19
+        dirPin = 26
+
+        self.gUnit.pi.wave_clear() 
+
+        self.gUnit.pi.write(self.sleepPin, 1)
+        self.gUnit.pi.write(self.dirPin, direction)
+
+        wfMiddle = []
+        bitmask = int(1<<stepPin)
+        wfMiddle.append(pigpio.pulse(bitmask, 0, delay))
+        wfMiddle.append(pigpio.pulse(0, bitmask, delay))   
+        
+        self.gUnit.pi.wave_add_generic(wfMiddle)
+        wid = self.gUnit.pi.wave_create
+        cbs = self.gUnit.pi.wave_send_once(wid)
+
+        self.gUnit.pi.wave_clear() # clear all waveforms
+        self.gUnit.pi.stop()
+
+pt = pulseTuner()
